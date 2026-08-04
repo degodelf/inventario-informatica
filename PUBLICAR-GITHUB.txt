@@ -1,0 +1,86 @@
+========================================================================
+  COMO PUBLICAR NO GITHUB E FAZER A ATUALIZAÇÃO AUTOMÁTICA FUNCIONAR
+  (repositório PÚBLICO — o app baixa e se atualiza sozinho)
+========================================================================
+
+Usuário: degodelf
+Repositório: inventario-informatica  (precisa ter EXATAMENTE esse nome,
+porque está gravado em atualizacao.py)
+
+>>> LEMBRE-SE: senha e dados (inventario.db, pasta anexos) NUNCA sobem.
+    O .gitignore já bloqueia isso. Suba só o CÓDIGO. <<<
+
+
+========================================================================
+  PARTE A — CRIAR O REPOSITÓRIO (só uma vez)
+========================================================================
+
+Opção 1 — Pelo site (sem git):
+  1. Entre em https://github.com/new
+  2. Repository name:  inventario-informatica
+  3. Marque "Public".  NÃO marque "Add README".  Clique "Create repository".
+  4. Na página do repo, clique "uploading an existing file".
+  5. Arraste APENAS estes arquivos (NÃO arraste inventario.db, a pasta
+     anexos, nem o .msix):
+        app.py  db.py  auth.py  cripto.py  etiquetas.py  relatorio.py
+        atualizacao.py  png_para_ico.py  logo_jq.png  build.bat
+        LEIAME.txt  PUBLICAR-GITHUB.txt  README.md  .gitignore
+        test_db.py  test_extras.py  test_cripto.py  test_sessao.py
+  6. Clique "Commit changes".
+
+Opção 2 — Pelo git (você já usa GitHub):
+  Na pasta do projeto:
+     git init
+     git add .
+     git commit -m "Primeira versao"
+     git branch -M main
+     git remote add origin https://github.com/degodelf/inventario-informatica.git
+     git push -u origin main
+  (o .gitignore garante que dados e senha não vão junto)
+
+
+========================================================================
+  PARTE B — PUBLICAR UMA VERSÃO (o .exe que os PCs vão baixar)
+========================================================================
+
+1. Gere o .exe:  duplo clique em build.bat  ->  sai dist\Inventario.exe
+2. No GitHub, abra o repo > aba "Releases" > "Draft a new release".
+3. Em "Choose a tag", digite a MESMA versão que está em atualizacao.py.
+   A primeira é:  v1.0.0     (clique "Create new tag").
+4. Release title: pode ser "Versao 1.0.0".
+5. Em "Attach binaries", arraste o arquivo  dist\Inventario.exe
+6. Clique "Publish release".
+
+Pronto. A partir daí, todo PC rodando o programa vai achar essa versão.
+
+
+========================================================================
+  PARTE C — LANÇAR UMA ATUALIZAÇÃO (toda vez que mudarmos algo)
+========================================================================
+
+O truque é SEMPRE subir o número da versão. Passo a passo:
+
+1. No arquivo atualizacao.py, aumente a linha:
+        VERSAO = "1.0.0"     ->     VERSAO = "1.0.1"   (ou 1.1.0, etc.)
+2. Gere o novo .exe (build.bat).
+3. Crie uma nova release com a tag IGUAL à nova versão (ex: v1.0.1) e
+   anexe o novo dist\Inventario.exe.
+4. Publique.
+
+O que acontece nos PCs: ao abrir, o programa vê que a release (v1.0.1) é
+maior que a versão dele (v1.0.0), pergunta "Baixar e instalar agora?",
+e ao confirmar ele se troca sozinho e reabre. Os dados e a senha
+continuam intactos (só o .exe é trocado).
+
+REGRA: a tag da release e o VERSAO do código devem casar. Se esquecer de
+subir o VERSAO antes de compilar, o app não vai se reconhecer como antigo.
+
+
+========================================================================
+  SE O PC DO TRABALHO BLOQUEAR (antivírus/rede)
+========================================================================
+
+A atualização automática baixa um .exe da internet — alguns PCs do estado
+bloqueiam isso. Se acontecer, o programa avisa que falhou (sem quebrar) e
+você atualiza pelo pendrive: copie o dist\Inventario.exe novo por cima do
+antigo. NUNCA apague inventario.db nem a pasta anexos.

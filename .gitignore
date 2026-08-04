@@ -1,0 +1,29 @@
+# ============================================================
+#  SEGURANÇA: nada aqui vai para o GitHub.
+#  Estes arquivos ficam SÓ na máquina onde o programa roda.
+# ============================================================
+
+# >>> DADOS E SENHA — NUNCA enviar <<<
+inventario.db          # todo o inventário + o hash da senha
+anexos/                # notas/OS digitalizadas
+*.db
+*.sqlite
+*.sqlite3
+
+# Instalador do Python que você baixou (não é do projeto)
+*.msix
+*.msix:Zone.Identifier
+
+# Resultados da compilação (gerados pelo build.bat)
+build/
+dist/
+*.spec
+logo_jq.ico
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Configurações locais de editor
+.vscode/
+.idea/

@@ -1,0 +1,119 @@
+========================================================================
+  INVENTÁRIO DA SALA DE INFORMÁTICA
+  Programa para cadastrar PCs, periféricos, cabos, celulares, tablets...
+========================================================================
+
+O QUE É
+-------
+Um programa de janela (Windows) para registrar todos os equipamentos da
+sala. Guarda tudo em UM único arquivo de banco (inventario.db) e as notas/
+ordens de serviço digitalizadas na pasta "anexos", ambos ao lado do
+programa. Fazer backup = copiar essa pasta.
+
+Recursos:
+  - Cadastro com código de patrimônio / código de barras (use leitor USB)
+  - Vincular acessórios a um PC (ex: teclado, mouse e cabos "dentro" do PC)
+  - Registrar manutenções terceirizadas e ANEXAR a nota/OS digitalizada
+  - Buscar e filtrar por categoria e status
+  - Miniatura de foto do item (formato PNG/GIF)
+  - Senha de acesso opcional (menu Segurança)
+  - CRIPTOGRAFIA do banco (LGPD): protege os dados em repouso (menu Segurança)
+  - ATUALIZAÇÃO AUTOMÁTICA pelo GitHub (menu Ajuda)
+  - VISUAL moderno (tema Windows 11) com claro/escuro (menu Aparência)
+  - Ícone e marca JQSoluçõesTI
+  - Gerar ETIQUETAS com código de barras (Code 39) para imprimir e colar
+    -> ótimo para os itens sem patrimônio de fábrica (teclado, mouse, cabos)
+  - Exportar para Excel (CSV) e gerar RELATÓRIO em PDF (via navegador)
+
+Como usar as novidades:
+  - Etiquetas: selecione itens na lista (ou nenhum, para todos) > botão
+    "Etiquetas". Abre no navegador; clique em Imprimir. TESTE passar o leitor
+    em UMA etiqueta antes de imprimir várias.
+  - Relatório/PDF: botão "Relatório/PDF" > no navegador use Ctrl+P >
+    "Salvar como PDF".
+  - Senha: menu "Segurança" > "Definir/alterar senha". Para tirar a senha,
+    deixe o campo em branco.
+  - Criptografia (LGPD): menu "Segurança" > "Ativar criptografia do banco".
+    Crie uma senha. A partir daí o inventario.db fica ILEGÍVEL fora do
+    programa e a senha é pedida ao abrir.
+    >>> ATENÇÃO: se ESQUECER a senha, os dados NÃO podem ser recuperados.
+        Guarde a senha em local seguro E mantenha backup do arquivo. <<<
+  - Atualização: acontece sozinha ao abrir (se houver internet). Também dá
+    para checar em "Ajuda" > "Verificar atualização agora". Veja
+    PUBLICAR-GITHUB.txt para publicar as versões.
+
+
+========================================================================
+  PASSO A PASSO — GERAR O .EXE (faça no seu PC de casa)
+========================================================================
+
+1) INSTALAR O PYTHON (só uma vez)
+   - Baixe em: https://www.python.org/downloads/
+   - Use a versão 3.11 OU MAIS NOVA (a criptografia do banco depende disso).
+   - Ao instalar, MARQUE a caixinha "Add Python to PATH".
+
+2) COPIAR ESTA PASTA PARA O WINDOWS
+   - Coloque a pasta do projeto num lugar simples, ex:
+        Documentos\Inventario\
+   - Ela deve conter: app.py, db.py, build.bat, LEIAME.txt
+
+3) TESTAR ANTES (opcional, recomendado)
+   - Abra a pasta, segure SHIFT + clique direito > "Abrir janela do
+     PowerShell aqui", e digite:
+        python app.py
+   - A janela do programa deve abrir. Cadastre um item de teste.
+
+4) GERAR O EXECUTÁVEL
+   - Dê DUPLO CLIQUE em "build.bat" e aguarde (1 a 2 minutos).
+   - No fim, o programa estará em:   dist\Inventario.exe
+
+
+========================================================================
+  LEVAR PARA O PC DO TRABALHO
+========================================================================
+
+- Copie APENAS o arquivo "dist\Inventario.exe" para um pendrive.
+- No PC do trabalho, cole numa pasta onde você TENHA PERMISSÃO de escrever
+  (ex: Documentos\Inventario\). NÃO use "Arquivos de Programas".
+- Dê duplo clique. Na primeira vez ele cria sozinho o banco e a pasta
+  "anexos" ali do lado.
+
+Avisos (por ser máquina do estado):
+- Pode aparecer "O Windows protegeu o seu PC" (SmartScreen).
+  Clique em "Mais informações" > "Executar assim mesmo".
+- O antivírus corporativo pode bloquear. Se acontecer, fale com a TI.
+- Alguns PCs públicos impedem rodar programas de pendrive; nesse caso,
+  copie para o disco do próprio computador primeiro.
+
+
+========================================================================
+  BACKUP (muito importante)
+========================================================================
+
+Todo o inventário está no arquivo "inventario.db" e as digitalizações na
+pasta "anexos", ambos ao lado do Inventario.exe.
+=> Copie esses dois (banco + pasta anexos) para um pendrive ou pasta de
+   rede toda semana. Só isso já é o backup completo.
+
+
+========================================================================
+  ARQUIVOS DO PROJETO
+========================================================================
+  app.py             -> a tela (janela do programa)
+  db.py              -> o banco de dados (cadastros e consultas)
+  auth.py            -> senha de acesso (hash seguro)
+  cripto.py          -> criptografia do banco (LGPD)
+  etiquetas.py       -> etiquetas com código de barras (Code 39)
+  relatorio.py       -> relatório em HTML/PDF
+  atualizacao.py     -> atualização automática (GitHub)
+  png_para_ico.py    -> gera o ícone (.ico) a partir da logo
+  logo_jq.png        -> logo / ícone do programa (JQSoluçõesTI)
+  test_db.py         -> teste do banco
+  test_extras.py     -> teste das melhorias (senha, etiquetas, etc.)
+  test_cripto.py     -> teste da criptografia
+  test_sessao.py     -> teste do fluxo completo (criar > cifrar > reabrir)
+  build.bat          -> gera o Inventario.exe
+  .gitignore         -> impede dados/senha de subirem ao GitHub
+  README.md          -> descrição do projeto (aparece no GitHub)
+  PUBLICAR-GITHUB.txt-> passo a passo para publicar e atualizar
+  LEIAME.txt         -> este arquivo
