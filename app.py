@@ -690,6 +690,9 @@ class App(tk.Tk):
         self.minsize(900, 520)
         self.title(self._titulo())
 
+        self.var_limpar_chrome = tk.BooleanVar(
+            value=db.get_config(self.conn, "limpar_chrome_preparar", "0") == "1")
+
         self._aplicar_tema(db.get_config(self.conn, "tema", "light"))
         self._definir_icone_janela()
         self._montar()
@@ -760,6 +763,12 @@ class App(tk.Tk):
                           command=self._editar_lista_remocao)
         m_fer.add_command(label="Lista de limpeza (reset) de apps…",
                           command=self._editar_lista_limpeza)
+        m_fer.add_separator()
+        m_fer.add_command(label="Limpar Chrome do aparelho (abas + cache/cookies)…",
+                          command=self._limpar_chrome_agora)
+        m_fer.add_checkbutton(label="Limpar Chrome no Preparar tablet",
+                              variable=self.var_limpar_chrome,
+                              command=self._salvar_toggle_chrome)
         menubar.add_cascade(label="Ferramentas", menu=m_fer)
         m_ap = tk.Menu(menubar, tearoff=0)
         m_ap.add_command(label="Alternar tema claro / escuro", command=self._alternar_tema)
@@ -1219,6 +1228,28 @@ class App(tk.Tk):
         self.wait_window(JanelaListaApps(self, self.conn, "limpeza"))
         self._persistir()
 
+    def _salvar_toggle_chrome(self):
+        db.set_config(self.conn, "limpar_chrome_preparar",
+                      "1" if self.var_limpar_chrome.get() else "0")
+        self._persistir()
+
+    def _limpar_chrome_agora(self):
+        serial = self._obter_serial_android()
+        if not serial:
+            return
+        self.config(cursor="watch")
+        self.update_idletasks()
+        try:
+            ok, msg = adb.limpar_chrome(serial)
+        finally:
+            self.config(cursor="")
+        if ok:
+            messagebox.showinfo("Limpar Chrome", f"✅ {msg}\n(a conta continua logada)")
+        else:
+            messagebox.showwarning(
+                "Limpar Chrome",
+                f"{msg}\n\nDica: o Chrome precisa estar ABERTO no aparelho.")
+
     def _preparar_tablet(self):
         """Fluxo de 1 clique: detecta > cadastra/atualiza > remove apps da lista
         > mostra resumo. Ideal para preparar vários tablets em sequência."""
@@ -1230,19 +1261,24 @@ class App(tk.Tk):
         info = adb.info_dispositivo(serial)
         rotulo = f"{info['marca']} {info['modelo']}".strip() or serial
 
+        passos = (
+            "• Cadastrar/atualizar no inventário\n"
+            f"• Resetar {len(lista_limpeza)} app(s) da lista de limpeza\n"
+            f"• Remover {len(lista)} app(s) da lista de remoção\n"
+        )
+        if self.var_limpar_chrome.get():
+            passos += "• Fechar abas + limpar cache/cookies do Chrome (mantém a conta)\n"
+
         if not messagebox.askyesno(
             "Preparar tablet",
-            f"Preparar este aparelho?\n\n{rotulo}\n\n"
-            f"• Cadastrar/atualizar no inventário\n"
-            f"• Resetar {len(lista_limpeza)} app(s) da lista de limpeza\n"
-            f"• Remover {len(lista)} app(s) da lista de remoção\n\n"
-            "Continuar?",
+            f"Preparar este aparelho?\n\n{rotulo}\n\n{passos}\nContinuar?",
         ):
             return
 
         self.config(cursor="watch")
         self.update_idletasks()
         removidos, resetados, falhas = 0, 0, []
+        chrome_resultado = ""
         try:
             # 1) cadastrar OU atualizar (pelo nº de série, evita duplicar)
             dados = {
@@ -1282,6 +1318,11 @@ class App(tk.Tk):
                             removidos += 1
                         else:
                             falhas.append(f"remover {pac}")
+
+            # 3) Chrome: fechar abas + limpar cache/cookies (mantém a conta)
+            if self.var_limpar_chrome.get():
+                ok_c, msg_c = adb.limpar_chrome(serial)
+                chrome_resultado = f"Chrome: {msg_c}" if ok_c else f"Chrome falhou: {msg_c}"
         finally:
             self.config(cursor="")
 
@@ -1294,6 +1335,8 @@ class App(tk.Tk):
             f"Apps resetados: {resetados} de {len(lista_limpeza)}\n"
             f"Apps removidos: {removidos} de {len(lista)}\n"
         )
+        if chrome_resultado:
+            resumo += chrome_resultado + "\n"
         if falhas:
             resumo += f"Falhas: {len(falhas)} ({', '.join(falhas[:5])})\n"
         resumo += "\nPode desconectar e plugar o PRÓXIMO tablet."

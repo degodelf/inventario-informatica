@@ -25,13 +25,16 @@ Recursos:
     automaticamente (marca/modelo/nº série) e gerenciar apps do aparelho
     (desinstalar, forçar parada). Requer "Depuração USB" ligada no aparelho.
   - PREPARAR TABLET (1 clique): detecta > cadastra/atualiza (sem duplicar pelo
-    nº de série) > RESETA os apps da "Lista de limpeza" (pm clear; ex: o Chrome
-    fecha as abas e limpa histórico/cookies) > REMOVE os apps da "Lista de
-    remoção" (desinstala) > "Concluído". Ideal para preparar vários tablets em
-    sequência. As duas listas você monta uma vez (menu Ferramentas, ou pelos
-    botões da janela "Gerenciar apps").
-    OBS: resetar o Chrome (pm clear) também o desloga da sincronização, mas
-    NÃO remove a conta Google do aparelho.
+    nº de série) > RESETA os apps da "Lista de limpeza" (pm clear) > REMOVE os
+    apps da "Lista de remoção" (desinstala) > opcionalmente LIMPA o Chrome >
+    "Concluído". Ideal para preparar vários tablets em sequência. As listas
+    você monta uma vez (menu Ferramentas, ou pelos botões do "Gerenciar apps").
+    OBS: a "Lista de limpeza" usa pm clear, que reseta o app INTEIRO (inclui
+    deslogar contas do app). Para o Chrome, prefira a opção abaixo.
+  - LIMPAR CHROME (menu Ferramentas, ou marque "Limpar Chrome no Preparar
+    tablet"): fecha todas as abas + limpa cache/cookies MANTENDO a conta Google
+    logada (via DevTools/ADB, sem pm clear). Requer o Chrome ABERTO no aparelho.
+    Não limpa o histórico (isso só sai com pm clear, que desloga).
   - Gerar ETIQUETAS com código de barras (Code 39) para imprimir e colar
     -> ótimo para os itens sem patrimônio de fábrica (teclado, mouse, cabos)
   - Exportar para Excel (CSV) e gerar RELATÓRIO em PDF (via navegador)
