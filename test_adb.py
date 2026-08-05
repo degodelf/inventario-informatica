@@ -25,4 +25,12 @@ info2 = adb.extrair_info({"ro.product.model": "Moto G"}, serial="ZY223XY")
 assert info2["numero_serie"] == "ZY223XY"
 print("ADB: fallback de nº de série OK ✅")
 
+# Detecção de série falsa/genérica (comum em tablet barato tipo M10)
+assert adb.serie_ruim("0123456789abcdef") is True
+assert adb.serie_ruim("") is True
+assert adb.serie_ruim("000000") is True       # tudo igual
+assert adb.serie_ruim("12345") is True        # curto demais
+assert adb.serie_ruim("R9WR30ABCDE") is False  # série real
+print("ADB: detecção de série ruim OK ✅")
+
 print("\nTESTE DO PARSER ADB PASSOU ✅")

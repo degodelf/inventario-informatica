@@ -24,6 +24,9 @@ Recursos:
   - APARELHOS ANDROID via USB (menu Ferramentas): detectar e cadastrar
     automaticamente (marca/modelo/nº série) e gerenciar apps do aparelho
     (desinstalar, forçar parada). Requer "Depuração USB" ligada no aparelho.
+    Se o nº de série for genérico/falso (comum em tablet barato, ex: Multilaser
+    M10), o sistema usa automaticamente o MAC do Wi-Fi ou o Android ID como
+    identificador único, para não duplicar/confundir aparelhos no inventário.
   - PREPARAR TABLET (1 clique): detecta > cadastra/atualiza (sem duplicar pelo
     nº de série) > RESETA os apps da "Lista de limpeza" (pm clear) > REMOVE os
     apps da "Lista de remoção" (desinstala) > opcionalmente LIMPA o Chrome >

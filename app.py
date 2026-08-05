@@ -1188,6 +1188,16 @@ class App(tk.Tk):
             )
         return prontos[0]["serial"]
 
+    def _obs_android(self, info, verbo="detectado"):
+        """Monta o texto de observações do cadastro com os identificadores."""
+        v = info.get("versao_android")
+        obs = f"Android {v} — {verbo} via USB" if v else f"{verbo.capitalize()} via USB"
+        if info.get("id_tipo") and info["id_tipo"] != "série":
+            obs += f" · id por {info['id_tipo']}"
+        if info.get("detalhe_ids"):
+            obs += f"\n{info['detalhe_ids']}"
+        return obs
+
     def _detectar_android(self):
         """Lê um tablet/celular Android plugado (via ADB) e abre o cadastro
         já preenchido com marca, modelo, nº de série e versão."""
@@ -1195,15 +1205,13 @@ class App(tk.Tk):
         if not serial:
             return
         info = adb.info_dispositivo(serial)
-        versao = info["versao_android"]
         preset = {
             "categoria": "Tablet",
             "marca": info["marca"],
             "modelo": info["modelo"],
             "numero_serie": info["numero_serie"],
             "status": "Em uso",
-            "observacoes": (f"Android {versao} — detectado via USB" if versao
-                            else "Detectado via USB"),
+            "observacoes": self._obs_android(info, "detectado"),
         }
         f = FormularioDispositivo(self, self.conn, preset=preset)
         self.wait_window(f)
@@ -1287,8 +1295,7 @@ class App(tk.Tk):
                 "modelo": info["modelo"],
                 "numero_serie": info["numero_serie"],
                 "status": "Em uso",
-                "observacoes": (f"Android {info['versao_android']} — preparado via USB"
-                                if info["versao_android"] else "Preparado via USB"),
+                "observacoes": self._obs_android(info, "preparado"),
             }
             existente = db.buscar_por_serie(self.conn, info["numero_serie"])
             if existente:

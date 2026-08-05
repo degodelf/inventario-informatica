@@ -93,10 +93,71 @@ def extrair_info(props, serial=""):
     }
 
 
+# Séries claramente falsas/genéricas comuns em tablets baratos (ex: Multilaser M10)
+_SERIAIS_RUINS = {
+    "", "unknown", "0123456789abcdef", "0000000000000000", "1234567890",
+    "emulator", "android", "0", "123456789", "abcdef",
+}
+
+
+def serie_ruim(s):
+    """Heurística: True se o nº de série parece falso/genérico (não confiável
+    para identificar o aparelho)."""
+    s = (s or "").strip().lower()
+    if not s or s in _SERIAIS_RUINS:
+        return True
+    if len(s) < 6:
+        return True
+    if len(set(s)) <= 1:            # tudo o mesmo caractere, ex: "000000"
+        return True
+    return False
+
+
+def _shell(serial, *args):
+    cod, saida = _run(["-s", serial, "shell", *args])
+    return saida.strip() if cod == 0 else ""
+
+
+def _mac_wifi(serial):
+    """MAC do Wi-Fi (único por hardware). '' se não conseguir."""
+    mac = _shell(serial, "cat", "/sys/class/net/wlan0/address").strip().lower()
+    if re.fullmatch(r"([0-9a-f]{2}:){5}[0-9a-f]{2}", mac) and mac != "00:00:00:00:00:00":
+        return mac.upper()
+    return ""
+
+
+def _android_id(serial):
+    """Android ID (único por aparelho, estável até um factory reset)."""
+    aid = _shell(serial, "settings", "get", "secure", "android_id").strip()
+    return aid if (aid and aid.lower() != "null") else ""
+
+
 def info_dispositivo(serial):
     """Lê as informações de um aparelho já autorizado. Retorna dict com
-    marca, modelo, numero_serie, versao_android."""
-    return extrair_info(_todas_props(serial), serial)
+    marca, modelo, numero_serie, versao_android — e, para tablets com série
+    ruim, usa MAC Wi-Fi / Android ID como identificador único (id_tipo,
+    detalhe_ids)."""
+    base = extrair_info(_todas_props(serial), serial)
+    serie = base["numero_serie"]
+    mac = _mac_wifi(serial)
+    aid = _android_id(serial)
+
+    if serie_ruim(serie):
+        # série não confiável -> usa um identificador realmente único
+        base["numero_serie"] = mac or aid or serie
+        base["id_tipo"] = "MAC Wi-Fi" if mac else ("Android ID" if aid else "série")
+    else:
+        base["id_tipo"] = "série"
+
+    partes = []
+    if serie and not serie_ruim(serie):
+        partes.append(f"Série {serie}")
+    if mac:
+        partes.append(f"MAC {mac}")
+    if aid:
+        partes.append(f"AndroidID {aid}")
+    base["detalhe_ids"] = " · ".join(partes)
+    return base
 
 
 # --- Gerenciamento de aplicativos ---------------------------------------------
