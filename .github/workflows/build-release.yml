@@ -29,7 +29,7 @@ jobs:
 
       - name: Compilar o .exe
         shell: cmd
-        run: python -m PyInstaller --onefile --windowed --icon logo_jq.ico --add-data "logo_jq.png;." --collect-all sv_ttk --name Inventario app.py
+        run: python -m PyInstaller --onefile --windowed --icon logo_jq.ico --add-data "logo_jq.png;." --add-data "adb;adb" --collect-all sv_ttk --name Inventario app.py
 
       - name: Criar a release e anexar o .exe
         env:

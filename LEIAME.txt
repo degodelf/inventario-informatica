@@ -21,6 +21,9 @@ Recursos:
   - ATUALIZAÇÃO AUTOMÁTICA pelo GitHub (menu Ajuda)
   - VISUAL moderno (tema Windows 11) com claro/escuro (menu Aparência)
   - Ícone e marca JQSoluçõesTI
+  - APARELHOS ANDROID via USB (menu Ferramentas): detectar e cadastrar
+    automaticamente (marca/modelo/nº série) e gerenciar apps do aparelho
+    (desinstalar, forçar parada). Requer "Depuração USB" ligada no aparelho.
   - Gerar ETIQUETAS com código de barras (Code 39) para imprimir e colar
     -> ótimo para os itens sem patrimônio de fábrica (teclado, mouse, cabos)
   - Exportar para Excel (CSV) e gerar RELATÓRIO em PDF (via navegador)
@@ -106,6 +109,8 @@ pasta "anexos", ambos ao lado do Inventario.exe.
   etiquetas.py       -> etiquetas com código de barras (Code 39)
   relatorio.py       -> relatório em HTML/PDF
   atualizacao.py     -> atualização automática (GitHub)
+  adb.py             -> comunicação com aparelhos Android (via ADB/USB)
+  adb/               -> o ADB embutido (adb.exe + DLLs)
   png_para_ico.py    -> gera o ícone (.ico) a partir da logo
   logo_jq.png        -> logo / ícone do programa (JQSoluçõesTI)
   test_db.py         -> teste do banco

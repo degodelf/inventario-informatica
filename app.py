@@ -26,6 +26,7 @@ import cripto
 import etiquetas
 import relatorio
 import atualizacao
+import adb
 
 # Tema visual moderno (Windows 11). Opcional: se não estiver instalado, o
 # programa continua funcionando com o tema padrão do Tkinter.
@@ -135,7 +136,7 @@ class FormularioDispositivo(tk.Toplevel):
     """Janela para criar ou editar um dispositivo.
     Ao fechar salvando, define self.salvou = True."""
 
-    def __init__(self, master, conn, disp=None):
+    def __init__(self, master, conn, disp=None, preset=None):
         super().__init__(master)
         self.conn = conn
         self.disp = disp                 # sqlite3.Row existente, ou None (novo)
@@ -152,6 +153,8 @@ class FormularioDispositivo(tk.Toplevel):
         self._montar()
         if disp:
             self._preencher(disp)
+        elif preset:
+            self._aplicar_preset(preset)
         self._atualizar_preview()
 
         _barra_titulo(self)
@@ -280,6 +283,15 @@ class FormularioDispositivo(tk.Toplevel):
             if i == d["pai_id"]:
                 self.var_pai.set(rot)
                 break
+
+    def _aplicar_preset(self, preset):
+        """Pré-preenche campos ao criar um item novo (ex: dados detectados por USB)."""
+        for chave, valor in preset.items():
+            if chave == "observacoes":
+                self.txt_obs.delete("1.0", "end")
+                self.txt_obs.insert("1.0", valor or "")
+            elif chave in self.vars:
+                self.vars[chave].set(valor or "")
 
     def _salvar(self):
         categoria = self.vars["categoria"].get().strip()
@@ -458,6 +470,109 @@ class JanelaManutencoes(tk.Toplevel):
             self._recarregar()
 
 
+# --- Janela: gerenciar apps de um aparelho Android ----------------------------
+
+class JanelaAppsAndroid(tk.Toplevel):
+    """Lista os apps de um aparelho Android e permite desinstalar / forçar parada."""
+
+    def __init__(self, master, serial):
+        super().__init__(master)
+        self.withdraw()
+        self.serial = serial
+        self.pacotes = []
+        self.var_sistema = tk.BooleanVar(value=False)
+
+        self.title("Apps do aparelho Android")
+        self.transient(master)
+        self.geometry("560x520")
+
+        self._montar()
+        self._recarregar()
+        _barra_titulo(self)
+        self.deiconify()
+        self.grab_set()
+
+    def _montar(self):
+        quadro = ttk.Frame(self, padding=10)
+        quadro.pack(fill="both", expand=True)
+
+        topo = ttk.Frame(quadro)
+        topo.pack(fill="x")
+        ttk.Label(topo, text="Apps instalados no aparelho:").pack(side="left")
+        ttk.Checkbutton(topo, text="incluir apps do sistema",
+                        variable=self.var_sistema, command=self._recarregar).pack(side="right")
+
+        meio = ttk.Frame(quadro)
+        meio.pack(fill="both", expand=True, pady=(6, 6))
+        self.lista = tk.Listbox(meio, selectmode="extended", activestyle="none")
+        vsb = ttk.Scrollbar(meio, orient="vertical", command=self.lista.yview)
+        self.lista.configure(yscrollcommand=vsb.set)
+        self.lista.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+
+        self.lbl_info = ttk.Label(quadro, text="")
+        self.lbl_info.pack(fill="x")
+
+        barra = ttk.Frame(quadro)
+        barra.pack(fill="x", pady=(6, 0))
+        ttk.Button(barra, text="Atualizar", command=self._recarregar).pack(side="left")
+        ttk.Button(barra, text="Forçar parada", command=self._forcar_parada).pack(side="left", padx=6)
+        ttk.Button(barra, text="Desinstalar selecionado(s)",
+                   command=self._desinstalar).pack(side="right")
+
+    def _recarregar(self):
+        self.config(cursor="watch")
+        self.update_idletasks()
+        try:
+            self.pacotes = adb.listar_apps(self.serial, incluir_sistema=self.var_sistema.get())
+        finally:
+            self.config(cursor="")
+        self.lista.delete(0, "end")
+        for p in self.pacotes:
+            self.lista.insert("end", p)
+        self.lbl_info.configure(text=f"{len(self.pacotes)} app(s). Selecione um ou mais.")
+
+    def _selecionados(self):
+        return [self.lista.get(i) for i in self.lista.curselection()]
+
+    def _desinstalar(self):
+        alvos = self._selecionados()
+        if not alvos:
+            messagebox.showinfo("Apps", "Selecione um ou mais apps na lista.")
+            return
+        amostra = "\n".join("• " + a for a in alvos[:15])
+        extra = "" if len(alvos) <= 15 else f"\n… e mais {len(alvos) - 15}"
+        if not messagebox.askyesno(
+            "Desinstalar",
+            f"Desinstalar {len(alvos)} app(s) DO APARELHO?\n\n{amostra}{extra}\n\n"
+            "Isso remove o app do tablet/celular. Confirmar?",
+        ):
+            return
+        falhas = []
+        for p in alvos:
+            ok, msg = adb.desinstalar_app(self.serial, p)
+            if not ok:
+                falhas.append(f"{p}: {msg}")
+        self._recarregar()
+        if falhas:
+            messagebox.showwarning(
+                "Desinstalar",
+                f"{len(alvos) - len(falhas)} ok, {len(falhas)} falharam:\n\n"
+                + "\n".join(falhas[:10]),
+            )
+        else:
+            messagebox.showinfo("Desinstalar", f"{len(alvos)} app(s) desinstalado(s). ✅")
+
+    def _forcar_parada(self):
+        alvos = self._selecionados()
+        if not alvos:
+            messagebox.showinfo("Apps", "Selecione um ou mais apps na lista.")
+            return
+        for p in alvos:
+            adb.parar_app(self.serial, p)
+        messagebox.showinfo("Forçar parada", f"Parada forçada em {len(alvos)} app(s).")
+
+
 # --- Janela principal ---------------------------------------------------------
 
 class App(tk.Tk):
@@ -528,6 +643,12 @@ class App(tk.Tk):
         m_seg.add_command(label="Ativar criptografia do banco…", command=self._ativar_cripto)
         m_seg.add_command(label="Desativar criptografia…", command=self._desativar_cripto)
         menubar.add_cascade(label="Segurança", menu=m_seg)
+        m_fer = tk.Menu(menubar, tearoff=0)
+        m_fer.add_command(label="Detectar tablet/celular Android (USB)…",
+                          command=self._detectar_android)
+        m_fer.add_command(label="Gerenciar apps do aparelho Android…",
+                          command=self._gerenciar_apps)
+        menubar.add_cascade(label="Ferramentas", menu=m_fer)
         m_ap = tk.Menu(menubar, tearoff=0)
         m_ap.add_command(label="Alternar tema claro / escuro", command=self._alternar_tema)
         menubar.add_cascade(label="Aparência", menu=m_ap)
@@ -896,6 +1017,85 @@ class App(tk.Tk):
         except Exception:
             pass
         self.destroy()
+
+    # ---- ferramentas: aparelhos Android via USB ----
+
+    def _obter_serial_android(self):
+        """Retorna o serial de UM aparelho Android pronto, ou None (mostrando o
+        aviso adequado). Usado pela detecção e pelo gerenciador de apps."""
+        if not adb.disponivel():
+            messagebox.showwarning("Android", "O ADB não está disponível nesta versão do programa.")
+            return None
+        self.config(cursor="watch")
+        self.update_idletasks()
+        try:
+            aparelhos = adb.listar_dispositivos()
+        finally:
+            self.config(cursor="")
+
+        prontos = [a for a in aparelhos if a["estado"] == "device"]
+        nao_autorizados = [a for a in aparelhos if a["estado"] == "unauthorized"]
+
+        if not aparelhos:
+            messagebox.showinfo(
+                "Android",
+                "Nenhum aparelho detectado.\n\n"
+                "1) Conecte o tablet/celular por USB\n"
+                "2) Ative a 'Depuração USB' (Opções do desenvolvedor)\n"
+                "3) Tente de novo",
+            )
+            return None
+        if not prontos and nao_autorizados:
+            messagebox.showinfo(
+                "Android",
+                "Aparelho conectado, mas falta AUTORIZAR o computador.\n\n"
+                "Na tela do aparelho, toque em 'Permitir' na janela de depuração USB "
+                "(marque 'Sempre permitir deste computador') e tente de novo.",
+            )
+            return None
+        if not prontos:
+            estados = ", ".join(a["estado"] for a in aparelhos)
+            messagebox.showwarning(
+                "Android", f"Aparelho detectado, mas não está pronto (estado: {estados})."
+            )
+            return None
+        if len(prontos) > 1:
+            messagebox.showinfo(
+                "Android",
+                f"{len(prontos)} aparelhos conectados. Vou usar o primeiro. "
+                "Faça um de cada vez.",
+            )
+        return prontos[0]["serial"]
+
+    def _detectar_android(self):
+        """Lê um tablet/celular Android plugado (via ADB) e abre o cadastro
+        já preenchido com marca, modelo, nº de série e versão."""
+        serial = self._obter_serial_android()
+        if not serial:
+            return
+        info = adb.info_dispositivo(serial)
+        versao = info["versao_android"]
+        preset = {
+            "categoria": "Tablet",
+            "marca": info["marca"],
+            "modelo": info["modelo"],
+            "numero_serie": info["numero_serie"],
+            "status": "Em uso",
+            "observacoes": (f"Android {versao} — detectado via USB" if versao
+                            else "Detectado via USB"),
+        }
+        f = FormularioDispositivo(self, self.conn, preset=preset)
+        self.wait_window(f)
+        if f.salvou:
+            self._recarregar()
+            self._persistir()
+
+    def _gerenciar_apps(self):
+        """Abre a janela para listar / desinstalar / parar apps do aparelho."""
+        serial = self._obter_serial_android()
+        if not serial:
+            return
+        JanelaAppsAndroid(self, serial)
 
     # ---- atualização automática (via GitHub Releases) ----
 

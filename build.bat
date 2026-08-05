@@ -37,7 +37,7 @@ python png_para_ico.py logo_jq.png logo_jq.ico
 REM 4) Gera o executavel (uma janela so, sem tela preta de console)
 echo.
 echo Gerando o executavel... (pode demorar 1-2 minutos)
-python -m PyInstaller --onefile --windowed --icon logo_jq.ico --add-data "logo_jq.png;." --collect-all sv_ttk --name Inventario app.py
+python -m PyInstaller --onefile --windowed --icon logo_jq.ico --add-data "logo_jq.png;." --add-data "adb;adb" --collect-all sv_ttk --name Inventario app.py
 
 if errorlevel 1 (
     echo.
