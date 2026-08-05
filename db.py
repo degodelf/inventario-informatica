@@ -38,6 +38,13 @@ STATUS = [
     "Baixado",
 ]
 
+# Marcas iniciais do combo (o usuário pode digitar novas; elas ficam salvas)
+MARCAS_PADRAO = [
+    "Multilaser", "Positivo", "Samsung", "Motorola", "LG", "Dell", "HP",
+    "Lenovo", "Acer", "Asus", "Philco", "Apple", "Xiaomi", "Logitech",
+    "Genius", "Intelbras", "Epson",
+]
+
 
 def agora():
     """Data/hora atual em texto (padrão ISO, ordena certo)."""
@@ -217,6 +224,18 @@ def buscar_por_serie(conn, numero_serie):
     return conn.execute(
         "SELECT * FROM dispositivos WHERE numero_serie = ? LIMIT 1", (numero_serie,)
     ).fetchone()
+
+
+def listar_marcas(conn):
+    """Marcas para o combo: as padrão MAIS as que já foram usadas no cadastro
+    (assim, marca nova que o usuário digita aparece nas próximas vezes)."""
+    usadas = [
+        r[0] for r in conn.execute(
+            "SELECT DISTINCT marca FROM dispositivos "
+            "WHERE marca IS NOT NULL AND TRIM(marca) <> ''"
+        ).fetchall()
+    ]
+    return sorted(set(MARCAS_PADRAO) | set(usadas), key=str.lower)
 
 
 def get_lista_remocao(conn):

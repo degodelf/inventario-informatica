@@ -155,8 +155,10 @@ class FormularioDispositivo(tk.Toplevel):
         self._montar()
         if disp:
             self._preencher(disp)
-        elif preset:
-            self._aplicar_preset(preset)
+        else:
+            self.vars["local"].set("Informática")   # local já vem preenchido em novos
+            if preset:
+                self._aplicar_preset(preset)
         self._atualizar_preview()
 
         _barra_titulo(self)
@@ -194,7 +196,12 @@ class FormularioDispositivo(tk.Toplevel):
         self.vars["id_curto"] = tk.StringVar()
         ttk.Entry(quadro, textvariable=self.vars["id_curto"], width=6).grid(row=0, column=3, sticky="w")
         combo("Categoria: *", "categoria", db.CATEGORIAS, 1)
-        linha("Marca:", "marca", 2)
+        # Marca: combo EDITÁVEL — escolhe da lista ou digita uma nova (fica salva)
+        ttk.Label(quadro, text="Marca:").grid(row=2, column=0, sticky="e", padx=(0, 8), pady=3)
+        self.vars["marca"] = tk.StringVar()
+        ttk.Combobox(quadro, textvariable=self.vars["marca"],
+                     values=db.listar_marcas(self.conn), width=32).grid(
+                         row=2, column=1, sticky="w", pady=3)
         linha("Modelo:", "modelo", 3)
         linha("Nº de série:", "numero_serie", 4)
         combo("Status: *", "status", db.STATUS, 5)
@@ -931,6 +938,15 @@ class App(tk.Tk):
             self.tree.focus(iid)
             self.tree.see(iid)
 
+    def _mostrar_novo(self, novo_id):
+        """Após ADICIONAR um item, limpa os filtros e mostra/seleciona ele —
+        garante que o recém-salvo apareça na hora, mesmo com busca/filtro ativo."""
+        self.var_busca.set("")
+        self.var_cat.set("")
+        self.var_stat.set("")
+        self._recarregar()
+        self._selecionar_id(novo_id)
+
     def _menu_botao_direito(self, evento):
         linha = self.tree.identify_row(evento.y)
         if linha:
@@ -942,9 +958,8 @@ class App(tk.Tk):
         f = FormularioDispositivo(self, self.conn)
         self.wait_window(f)
         if f.salvou:
-            self._recarregar()
             self._persistir()
-            self._selecionar_id(f.salvou_id)
+            self._mostrar_novo(f.salvou_id)
 
     def _editar(self):
         did = self._id_selecionado()
@@ -1282,9 +1297,8 @@ class App(tk.Tk):
         f = FormularioDispositivo(self, self.conn, preset=preset)
         self.wait_window(f)
         if f.salvou:
-            self._recarregar()
             self._persistir()
-            self._selecionar_id(f.salvou_id)
+            self._mostrar_novo(f.salvou_id)
 
     def _detectar_android(self):
         """Lê um tablet/celular Android plugado (via ADB) e abre o cadastro
@@ -1304,8 +1318,8 @@ class App(tk.Tk):
         f = FormularioDispositivo(self, self.conn, preset=preset)
         self.wait_window(f)
         if f.salvou:
-            self._recarregar()
             self._persistir()
+            self._mostrar_novo(f.salvou_id)
 
     def _gerenciar_apps(self):
         """Abre a janela para listar / desinstalar / parar apps do aparelho."""
@@ -1421,6 +1435,7 @@ class App(tk.Tk):
         finally:
             self.config(cursor="")
 
+        self.var_busca.set(""); self.var_cat.set(""); self.var_stat.set("")
         self._recarregar()
         self._persistir()
 
