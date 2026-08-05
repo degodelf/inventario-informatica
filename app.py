@@ -141,6 +141,7 @@ class FormularioDispositivo(tk.Toplevel):
         self.conn = conn
         self.disp = disp                 # sqlite3.Row existente, ou None (novo)
         self.salvou = False
+        self.salvou_id = None            # id do item salvo (para selecionar na lista)
         self.foto_path = disp["foto_path"] if disp else None
 
         self.withdraw()                       # esconde até ficar pronto (barra de título correta)
@@ -186,7 +187,11 @@ class FormularioDispositivo(tk.Toplevel):
 
         # Coluna 0/1
         e_pat = linha("Patrimônio / Cód. barras:", "patrimonio", 0)
-        e_pat.configure(width=34)
+        e_pat.configure(width=22)
+        # ID interno de 2 dígitos, ao lado do patrimônio
+        ttk.Label(quadro, text="ID (2 díg.):").grid(row=0, column=2, sticky="e", padx=(10, 4))
+        self.vars["id_curto"] = tk.StringVar()
+        ttk.Entry(quadro, textvariable=self.vars["id_curto"], width=6).grid(row=0, column=3, sticky="w")
         combo("Categoria: *", "categoria", db.CATEGORIAS, 1)
         linha("Marca:", "marca", 2)
         linha("Modelo:", "modelo", 3)
@@ -271,8 +276,9 @@ class FormularioDispositivo(tk.Toplevel):
             self.lbl_preview.configure(image="", text="(sem prévia — use 'Ver' para abrir)")
 
     def _preencher(self, d):
-        for chave in ["patrimonio", "categoria", "marca", "modelo", "numero_serie",
-                      "status", "local", "responsavel", "data_compra", "garantia_ate"]:
+        for chave in ["patrimonio", "id_curto", "categoria", "marca", "modelo",
+                      "numero_serie", "status", "local", "responsavel",
+                      "data_compra", "garantia_ate"]:
             self.vars[chave].set(d[chave] or "")
         self.vars["valor"].set(fmt_valor(d["valor"]).replace("R$ ", "") if d["valor"] is not None else "")
         self.txt_obs.insert("1.0", d["observacoes"] or "")
@@ -313,6 +319,7 @@ class FormularioDispositivo(tk.Toplevel):
 
         dados = {
             "patrimonio": self.vars["patrimonio"].get().strip() or None,
+            "id_curto": self.vars["id_curto"].get().strip() or None,
             "categoria": categoria,
             "marca": self.vars["marca"].get().strip() or None,
             "modelo": self.vars["modelo"].get().strip() or None,
@@ -329,8 +336,9 @@ class FormularioDispositivo(tk.Toplevel):
         }
         if self.disp:
             db.atualizar_dispositivo(self.conn, self.disp["id"], dados)
+            self.salvou_id = self.disp["id"]
         else:
-            db.adicionar_dispositivo(self.conn, dados)
+            self.salvou_id = db.adicionar_dispositivo(self.conn, dados)
         self.salvou = True
         self.destroy()
 
@@ -818,14 +826,15 @@ class App(tk.Tk):
         quadro = ttk.Frame(self, padding=10)
         quadro.pack(fill="both", expand=True)
 
-        cols = ("id", "patrimonio", "categoria", "marca", "modelo", "status", "local", "responsavel")
+        cols = ("id", "id_curto", "patrimonio", "categoria", "marca", "modelo",
+                "status", "local", "responsavel")
         self.tree = ttk.Treeview(quadro, columns=cols, show="headings")
         larguras = {
-            "id": 45, "patrimonio": 120, "categoria": 140, "marca": 110,
-            "modelo": 150, "status": 110, "local": 140, "responsavel": 120,
+            "id": 40, "id_curto": 55, "patrimonio": 110, "categoria": 130, "marca": 100,
+            "modelo": 140, "status": 100, "local": 120, "responsavel": 110,
         }
         titulos = {
-            "id": "ID", "patrimonio": "Patrimônio", "categoria": "Categoria",
+            "id": "#", "id_curto": "ID", "patrimonio": "Patrimônio", "categoria": "Categoria",
             "marca": "Marca", "modelo": "Modelo", "status": "Status",
             "local": "Local", "responsavel": "Responsável",
         }
@@ -837,6 +846,15 @@ class App(tk.Tk):
         self.tree.pack(side="left", fill="both", expand=True)
         vsb.pack(side="right", fill="y")
         self.tree.bind("<Double-1>", lambda e: self._editar())
+
+        # Menu de clique com o botão direito na tabela
+        self.menu_tabela = tk.Menu(self, tearoff=0)
+        self.menu_tabela.add_command(label="Editar", command=self._editar)
+        self.menu_tabela.add_command(label="Manutenções…", command=self._manutencoes)
+        self.menu_tabela.add_command(label="Gerar etiqueta", command=self._etiquetas)
+        self.menu_tabela.add_separator()
+        self.menu_tabela.add_command(label="Excluir", command=self._excluir)
+        self.tree.bind("<Button-3>", self._menu_botao_direito)
 
         # cor de fundo diferente por status "problema"
         self.tree.tag_configure("quebrado", background="#ffe0e0")
@@ -853,7 +871,8 @@ class App(tk.Tk):
         rodape.pack(fill="x", side="bottom")
         self.lbl_status = ttk.Label(rodape, text="", anchor="w", padding=(10, 4))
         self.lbl_status.pack(side="left")
-        ttk.Label(rodape, text="JQSoluçõesTI", anchor="e", padding=(10, 4)).pack(side="right")
+        ttk.Label(rodape, text=f"JQSoluçõesTI · v{atualizacao.VERSAO}",
+                  anchor="e", padding=(10, 4)).pack(side="right")
 
     # ---- ações ----
 
@@ -877,8 +896,9 @@ class App(tk.Tk):
             self.tree.insert(
                 "", "end", iid=str(d["id"]),
                 values=(
-                    d["id"], d["patrimonio"] or "", d["categoria"], d["marca"] or "",
-                    d["modelo"] or "", d["status"], d["local"] or "", d["responsavel"] or "",
+                    d["id"], d["id_curto"] or "", d["patrimonio"] or "", d["categoria"],
+                    d["marca"] or "", d["modelo"] or "", d["status"], d["local"] or "",
+                    d["responsavel"] or "",
                 ),
                 tags=(tag,) if tag else (),
             )
@@ -900,12 +920,28 @@ class App(tk.Tk):
         sel = self.tree.selection()
         return int(sel[0]) if sel else None
 
+    def _selecionar_id(self, did):
+        """Seleciona, foca e rola até o item na lista (ex: recém-salvo)."""
+        iid = str(did)
+        if did and self.tree.exists(iid):
+            self.tree.selection_set(iid)
+            self.tree.focus(iid)
+            self.tree.see(iid)
+
+    def _menu_botao_direito(self, evento):
+        linha = self.tree.identify_row(evento.y)
+        if linha:
+            self.tree.selection_set(linha)
+            self.tree.focus(linha)
+            self.menu_tabela.tk_popup(evento.x_root, evento.y_root)
+
     def _novo(self):
         f = FormularioDispositivo(self, self.conn)
         self.wait_window(f)
         if f.salvou:
             self._recarregar()
             self._persistir()
+            self._selecionar_id(f.salvou_id)
 
     def _editar(self):
         did = self._id_selecionado()
@@ -918,6 +954,7 @@ class App(tk.Tk):
         if f.salvou:
             self._recarregar()
             self._persistir()
+            self._selecionar_id(f.salvou_id)
 
     def _excluir(self):
         did = self._id_selecionado()

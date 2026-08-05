@@ -15,6 +15,11 @@ Recursos:
   - Vincular acessórios a um PC (ex: teclado, mouse e cabos "dentro" do PC)
   - Registrar manutenções terceirizadas e ANEXAR a nota/OS digitalizada
   - Buscar e filtrar por categoria e status
+  - Campo "ID (2 díg.)" no cadastro (além do patrimônio), visível na lista,
+    na busca e na exportação
+  - Menu de BOTÃO DIREITO na tabela (Editar, Manutenções, Etiqueta, Excluir)
+  - Item recém-salvo já aparece SELECIONADO na lista
+  - Versão do sistema visível no rodapé (canto inferior direito)
   - Miniatura de foto do item (formato PNG/GIF)
   - Senha de acesso opcional (menu Segurança)
   - CRIPTOGRAFIA do banco (LGPD): protege os dados em repouso (menu Segurança)

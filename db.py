@@ -61,6 +61,7 @@ def criar_tabelas(conn):
         CREATE TABLE IF NOT EXISTS dispositivos (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             patrimonio    TEXT,                      -- código de barras / nº patrimônio
+            id_curto      TEXT,                      -- ID interno de 2 dígitos
             categoria     TEXT NOT NULL,
             marca         TEXT,
             modelo        TEXT,
@@ -102,6 +103,11 @@ def criar_tabelas(conn):
         CREATE INDEX IF NOT EXISTS idx_manut_disp      ON manutencoes(dispositivo_id);
         """
     )
+    # Migração: adiciona colunas novas em bancos criados por versões antigas.
+    # Usa row[1] (nome da coluna) para funcionar com ou sem row_factory.
+    colunas = {row[1] for row in conn.execute("PRAGMA table_info(dispositivos)")}
+    if "id_curto" not in colunas:
+        conn.execute("ALTER TABLE dispositivos ADD COLUMN id_curto TEXT")
     conn.commit()
 
 
@@ -124,7 +130,7 @@ def set_config(conn, chave, valor):
 # --- Campos que o formulário de dispositivo envia ----------------------------
 
 CAMPOS_DISPOSITIVO = [
-    "patrimonio", "categoria", "marca", "modelo", "numero_serie",
+    "patrimonio", "id_curto", "categoria", "marca", "modelo", "numero_serie",
     "status", "local", "responsavel", "data_compra", "garantia_ate",
     "valor", "pai_id", "foto_path", "observacoes",
 ]
@@ -185,11 +191,12 @@ def listar_dispositivos(conn, texto="", categoria="", status=""):
     if texto:
         like = f"%{texto.strip()}%"
         condicoes.append(
-            "(IFNULL(patrimonio,'') LIKE ? OR IFNULL(marca,'') LIKE ? "
-            "OR IFNULL(modelo,'') LIKE ? OR IFNULL(numero_serie,'') LIKE ? "
-            "OR IFNULL(local,'') LIKE ? OR IFNULL(responsavel,'') LIKE ?)"
+            "(IFNULL(patrimonio,'') LIKE ? OR IFNULL(id_curto,'') LIKE ? "
+            "OR IFNULL(marca,'') LIKE ? OR IFNULL(modelo,'') LIKE ? "
+            "OR IFNULL(numero_serie,'') LIKE ? OR IFNULL(local,'') LIKE ? "
+            "OR IFNULL(responsavel,'') LIKE ?)"
         )
-        params += [like] * 6
+        params += [like] * 7
     if categoria:
         condicoes.append("categoria = ?")
         params.append(categoria)
@@ -325,14 +332,14 @@ def exportar_csv(conn, caminho):
     import csv
 
     linhas = conn.execute(
-        "SELECT id, patrimonio, categoria, marca, modelo, numero_serie, status, "
+        "SELECT id, patrimonio, id_curto, categoria, marca, modelo, numero_serie, status, "
         "local, responsavel, data_compra, garantia_ate, valor, observacoes "
         "FROM dispositivos ORDER BY categoria, marca"
     ).fetchall()
     with open(caminho, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f, delimiter=";")  # ';' abre certinho no Excel PT-BR
         w.writerow([
-            "ID", "Patrimônio", "Categoria", "Marca", "Modelo", "Nº Série",
+            "ID", "Patrimônio", "ID (2 díg.)", "Categoria", "Marca", "Modelo", "Nº Série",
             "Status", "Local", "Responsável", "Data compra", "Garantia até",
             "Valor", "Observações",
         ])
