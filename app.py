@@ -515,25 +515,32 @@ class JanelaAppsAndroid(tk.Toplevel):
         self.lbl_info.pack(fill="x")
 
         barra = ttk.Frame(quadro)
-        barra.pack(fill="x", pady=(6, 0))
+        barra.pack(fill="x", pady=(6, 2))
         ttk.Button(barra, text="Atualizar", command=self._recarregar).pack(side="left")
         ttk.Button(barra, text="Forçar parada", command=self._forcar_parada).pack(side="left", padx=6)
-        ttk.Button(barra, text="➕ p/ lista de remoção",
-                   command=self._adicionar_lista).pack(side="left")
         ttk.Button(barra, text="Desinstalar selecionado(s)",
                    command=self._desinstalar).pack(side="right")
 
-    def _adicionar_lista(self):
+        barra2 = ttk.Frame(quadro)
+        barra2.pack(fill="x")
+        ttk.Label(barra2, text="Adicionar seleção à:").pack(side="left")
+        ttk.Button(barra2, text="lista de remoção",
+                   command=lambda: self._adicionar_lista("remocao")).pack(side="left", padx=4)
+        ttk.Button(barra2, text="lista de limpeza",
+                   command=lambda: self._adicionar_lista("limpeza")).pack(side="left")
+
+    def _adicionar_lista(self, tipo):
         alvos = self._selecionados()
         if not alvos:
             messagebox.showinfo("Apps", "Selecione um ou mais apps na lista.")
             return
-        atual = db.get_lista_remocao(self.conn)
-        db.set_lista_remocao(self.conn, atual + alvos)
-        messagebox.showinfo(
-            "Lista de remoção",
-            f"{len(alvos)} app(s) adicionado(s) à lista que o 'Preparar tablet' remove.",
-        )
+        if tipo == "remocao":
+            db.set_lista_remocao(self.conn, db.get_lista_remocao(self.conn) + alvos)
+            nome = "remoção (o Preparar tablet desinstala)"
+        else:
+            db.set_lista_limpeza(self.conn, db.get_lista_limpeza(self.conn) + alvos)
+            nome = "limpeza (o Preparar tablet reseta)"
+        messagebox.showinfo("Listas", f"{len(alvos)} app(s) adicionado(s) à lista de {nome}.")
 
     def _recarregar(self):
         self.config(cursor="watch")
@@ -588,26 +595,46 @@ class JanelaAppsAndroid(tk.Toplevel):
         messagebox.showinfo("Forçar parada", f"Parada forçada em {len(alvos)} app(s).")
 
 
-# --- Janela: lista de remoção de apps (usada pelo "Preparar tablet") ----------
+# --- Janela: listas de apps (remoção / limpeza) usadas pelo "Preparar tablet" -
 
-class JanelaListaRemocao(tk.Toplevel):
-    def __init__(self, master, conn):
+class JanelaListaApps(tk.Toplevel):
+    """Edita uma lista de pacotes: 'remocao' (desinstalar) ou 'limpeza' (reset)."""
+
+    _CONFIG = {
+        "remocao": ("Lista de remoção de apps",
+                    "Apps que o 'Preparar tablet' vai REMOVER (desinstalar) de cada aparelho:"),
+        "limpeza": ("Lista de limpeza (reset) de apps",
+                    "Apps que o 'Preparar tablet' vai RESETAR (pm clear). Ex: com.android.chrome "
+                    "fecha todas as abas e limpa o Chrome:"),
+    }
+
+    def __init__(self, master, conn, tipo):
         super().__init__(master)
         self.withdraw()
         self.conn = conn
-        self.title("Lista de remoção de apps")
+        self.tipo = tipo
+        titulo, self.descricao = self._CONFIG[tipo]
+        self.title(titulo)
         self.transient(master)
-        self.geometry("480x460")
+        self.geometry("500x460")
         self._montar()
         self._recarregar()
         _barra_titulo(self)
         self.deiconify()
         self.grab_set()
 
+    def _get(self):
+        f = db.get_lista_remocao if self.tipo == "remocao" else db.get_lista_limpeza
+        return f(self.conn)
+
+    def _set(self, pacotes):
+        f = db.set_lista_remocao if self.tipo == "remocao" else db.set_lista_limpeza
+        f(self.conn, pacotes)
+
     def _montar(self):
         q = ttk.Frame(self, padding=10)
         q.pack(fill="both", expand=True)
-        ttk.Label(q, text="Apps que o 'Preparar tablet' vai remover de cada aparelho:").pack(anchor="w")
+        ttk.Label(q, text=self.descricao, wraplength=460, justify="left").pack(anchor="w")
 
         meio = ttk.Frame(q)
         meio.pack(fill="both", expand=True, pady=6)
@@ -627,19 +654,19 @@ class JanelaListaRemocao(tk.Toplevel):
 
         barra = ttk.Frame(q)
         barra.pack(fill="x", pady=(8, 0))
-        ttk.Label(barra, text="(nome do pacote, ex: com.exemplo.app)",
+        ttk.Label(barra, text="(nome do pacote, ex: com.android.chrome)",
                   foreground="gray").pack(side="left")
         ttk.Button(barra, text="Remover da lista", command=self._remover).pack(side="right")
 
     def _recarregar(self):
         self.lista.delete(0, "end")
-        for p in db.get_lista_remocao(self.conn):
+        for p in self._get():
             self.lista.insert("end", p)
 
     def _adicionar(self):
         p = self.var_novo.get().strip()
         if p:
-            db.set_lista_remocao(self.conn, db.get_lista_remocao(self.conn) + [p])
+            self._set(self._get() + [p])
             self.var_novo.set("")
             self._recarregar()
 
@@ -647,7 +674,7 @@ class JanelaListaRemocao(tk.Toplevel):
         sel = {self.lista.get(i) for i in self.lista.curselection()}
         if not sel:
             return
-        db.set_lista_remocao(self.conn, [p for p in db.get_lista_remocao(self.conn) if p not in sel])
+        self._set([p for p in self._get() if p not in sel])
         self._recarregar()
 
 
@@ -731,6 +758,8 @@ class App(tk.Tk):
                           command=self._gerenciar_apps)
         m_fer.add_command(label="Lista de remoção de apps…",
                           command=self._editar_lista_remocao)
+        m_fer.add_command(label="Lista de limpeza (reset) de apps…",
+                          command=self._editar_lista_limpeza)
         menubar.add_cascade(label="Ferramentas", menu=m_fer)
         m_ap = tk.Menu(menubar, tearoff=0)
         m_ap.add_command(label="Alternar tema claro / escuro", command=self._alternar_tema)
@@ -1183,8 +1212,11 @@ class App(tk.Tk):
         self._persistir()          # pode ter mudado a lista de remoção
 
     def _editar_lista_remocao(self):
-        j = JanelaListaRemocao(self, self.conn)
-        self.wait_window(j)
+        self.wait_window(JanelaListaApps(self, self.conn, "remocao"))
+        self._persistir()
+
+    def _editar_lista_limpeza(self):
+        self.wait_window(JanelaListaApps(self, self.conn, "limpeza"))
         self._persistir()
 
     def _preparar_tablet(self):
@@ -1194,6 +1226,7 @@ class App(tk.Tk):
         if not serial:
             return
         lista = db.get_lista_remocao(self.conn)
+        lista_limpeza = db.get_lista_limpeza(self.conn)
         info = adb.info_dispositivo(serial)
         rotulo = f"{info['marca']} {info['modelo']}".strip() or serial
 
@@ -1201,6 +1234,7 @@ class App(tk.Tk):
             "Preparar tablet",
             f"Preparar este aparelho?\n\n{rotulo}\n\n"
             f"• Cadastrar/atualizar no inventário\n"
+            f"• Resetar {len(lista_limpeza)} app(s) da lista de limpeza\n"
             f"• Remover {len(lista)} app(s) da lista de remoção\n\n"
             "Continuar?",
         ):
@@ -1208,7 +1242,7 @@ class App(tk.Tk):
 
         self.config(cursor="watch")
         self.update_idletasks()
-        removidos, falhas = 0, []
+        removidos, resetados, falhas = 0, 0, []
         try:
             # 1) cadastrar OU atualizar (pelo nº de série, evita duplicar)
             dados = {
@@ -1230,9 +1264,16 @@ class App(tk.Tk):
                 db.adicionar_dispositivo(self.conn, dados)
                 acao = "cadastrado"
 
-            # 2) parar + desinstalar os apps da lista que estiverem instalados
-            if lista:
+            # 2) resetar (pm clear) e desinstalar os apps das listas
+            if lista or lista_limpeza:
                 instalados = set(adb.listar_apps(serial, incluir_sistema=True))
+                for pac in lista_limpeza:
+                    if pac in instalados:
+                        ok, _msg = adb.limpar_dados_app(serial, pac)
+                        if ok:
+                            resetados += 1
+                        else:
+                            falhas.append(f"reset {pac}")
                 for pac in lista:
                     if pac in instalados:
                         adb.parar_app(serial, pac)
@@ -1240,7 +1281,7 @@ class App(tk.Tk):
                         if ok:
                             removidos += 1
                         else:
-                            falhas.append(pac)
+                            falhas.append(f"remover {pac}")
         finally:
             self.config(cursor="")
 
@@ -1250,10 +1291,11 @@ class App(tk.Tk):
         resumo = (
             "✅ Processo concluído!\n\n"
             f"Aparelho {acao}: {rotulo}\n"
+            f"Apps resetados: {resetados} de {len(lista_limpeza)}\n"
             f"Apps removidos: {removidos} de {len(lista)}\n"
         )
         if falhas:
-            resumo += f"Não removidos: {len(falhas)} ({', '.join(falhas[:5])})\n"
+            resumo += f"Falhas: {len(falhas)} ({', '.join(falhas[:5])})\n"
         resumo += "\nPode desconectar e plugar o PRÓXIMO tablet."
         messagebox.showinfo("Preparar tablet", resumo)
 

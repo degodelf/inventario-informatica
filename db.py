@@ -224,6 +224,18 @@ def set_lista_remocao(conn, pacotes):
     set_config(conn, "apps_remocao", "\n".join(limpos))
 
 
+def get_lista_limpeza(conn):
+    """Lista de pacotes (apps) que o 'Preparar tablet' deve resetar (pm clear)."""
+    txt = get_config(conn, "apps_limpeza", "") or ""
+    return [linha.strip() for linha in txt.splitlines() if linha.strip()]
+
+
+def set_lista_limpeza(conn, pacotes):
+    """Salva a lista de apps a resetar (sem duplicatas, ordenada)."""
+    limpos = sorted({p.strip() for p in pacotes if p.strip()})
+    set_config(conn, "apps_limpeza", "\n".join(limpos))
+
+
 def listar_filhos(conn, pai_id):
     """Lista os acessórios vinculados a um dispositivo pai (ex: mouse do PC)."""
     return conn.execute(

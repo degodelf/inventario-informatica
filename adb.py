@@ -126,3 +126,10 @@ def parar_app(serial, pacote):
     """Força a parada de um app (temporário; pode reiniciar). Retorna (ok, msg)."""
     cod, saida = _run(["-s", serial, "shell", "am", "force-stop", pacote], timeout=20)
     return (cod == 0), (saida.strip() or "Parado.")
+
+
+def limpar_dados_app(serial, pacote):
+    """Reseta um app ao estado 'novo' (pm clear): apaga dados, cache, abas,
+    histórico, logins do app. Ex: fecha todas as abas do Chrome. (ok, msg)."""
+    _cod, saida = _run(["-s", serial, "shell", "pm", "clear", pacote], timeout=30)
+    return ("Success" in saida), saida.strip()
