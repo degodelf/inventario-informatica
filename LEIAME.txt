@@ -32,6 +32,10 @@ Recursos:
     Se o nº de série for genérico/falso (comum em tablet barato, ex: Multilaser
     M10), o sistema usa automaticamente o MAC do Wi-Fi ou o Android ID como
     identificador único, para não duplicar/confundir aparelhos no inventário.
+  - DETECTAR POR CABO (MTP) — sem depuração (menu Ferramentas): quando o
+    aparelho está gerenciado/bloqueado e NÃO dá pra ligar a Depuração USB, o
+    programa lê pelo Windows (modo MTP/câmera) o MODELO e o Nº DE SÉRIE e
+    preenche o cadastro. Só lê (não gerencia). Ideal quando o ADB não funciona.
   - PREPARAR TABLET (1 clique): detecta > cadastra/atualiza (sem duplicar pelo
     nº de série) > RESETA os apps da "Lista de limpeza" (pm clear) > REMOVE os
     apps da "Lista de remoção" (desinstala) > opcionalmente LIMPA o Chrome >

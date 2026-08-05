@@ -27,6 +27,7 @@ import etiquetas
 import relatorio
 import atualizacao
 import adb
+import mtp
 
 # Tema visual moderno (Windows 11). Opcional: se não estiver instalado, o
 # programa continua funcionando com o tema padrão do Tkinter.
@@ -763,7 +764,9 @@ class App(tk.Tk):
         m_fer.add_command(label="⚡ Preparar tablet (provisionar)…",
                           command=self._preparar_tablet)
         m_fer.add_separator()
-        m_fer.add_command(label="Detectar tablet/celular Android (USB)…",
+        m_fer.add_command(label="Detectar por cabo — MTP (sem depuração)…",
+                          command=self._detectar_mtp)
+        m_fer.add_command(label="Detectar via depuração — ADB (avançado)…",
                           command=self._detectar_android)
         m_fer.add_command(label="Gerenciar apps do aparelho Android…",
                           command=self._gerenciar_apps)
@@ -1234,6 +1237,54 @@ class App(tk.Tk):
         if info.get("detalhe_ids"):
             obs += f"\n{info['detalhe_ids']}"
         return obs
+
+    def _detectar_mtp(self):
+        """Lê o aparelho plugado pelo Windows (modo MTP/câmera), SEM depuração,
+        e abre o cadastro preenchido com modelo e nº de série."""
+        if not sys.platform.startswith("win"):
+            messagebox.showinfo("Detectar (MTP)", "Este recurso só funciona no Windows.")
+            return
+        self.config(cursor="watch")
+        self.update_idletasks()
+        try:
+            aparelhos = mtp.listar_portateis()
+        finally:
+            self.config(cursor="")
+
+        if not aparelhos:
+            messagebox.showinfo(
+                "Detectar (MTP)",
+                "Nenhum aparelho portátil detectado.\n\n"
+                "1) Conecte o tablet por USB\n"
+                "2) Na tela do aparelho, escolha o modo "
+                "'Transferência de arquivos (MTP)'\n"
+                "3) Tente de novo",
+            )
+            return
+
+        a = aparelhos[0]
+        if len(aparelhos) > 1:
+            messagebox.showinfo(
+                "Detectar (MTP)",
+                f"{len(aparelhos)} aparelhos conectados. Vou usar o primeiro "
+                f"({a['nome']}). Faça um de cada vez.",
+            )
+        obs = "Detectado por cabo (MTP)"
+        if not a["serie"]:
+            obs += " · nº de série não veio limpo (confira/preencha)"
+        preset = {
+            "categoria": "Tablet",
+            "modelo": a["nome"],
+            "numero_serie": a["serie"],
+            "status": "Em uso",
+            "observacoes": obs,
+        }
+        f = FormularioDispositivo(self, self.conn, preset=preset)
+        self.wait_window(f)
+        if f.salvou:
+            self._recarregar()
+            self._persistir()
+            self._selecionar_id(f.salvou_id)
 
     def _detectar_android(self):
         """Lê um tablet/celular Android plugado (via ADB) e abre o cadastro
