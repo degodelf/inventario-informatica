@@ -202,6 +202,28 @@ def listar_dispositivos(conn, texto="", categoria="", status=""):
     return conn.execute(sql, params).fetchall()
 
 
+def buscar_por_serie(conn, numero_serie):
+    """Retorna o dispositivo com aquele nº de série, ou None. Usado para não
+    duplicar cadastro ao preparar o mesmo tablet de novo."""
+    if not numero_serie:
+        return None
+    return conn.execute(
+        "SELECT * FROM dispositivos WHERE numero_serie = ? LIMIT 1", (numero_serie,)
+    ).fetchone()
+
+
+def get_lista_remocao(conn):
+    """Lista de pacotes (apps) que o 'Preparar tablet' deve remover."""
+    txt = get_config(conn, "apps_remocao", "") or ""
+    return [linha.strip() for linha in txt.splitlines() if linha.strip()]
+
+
+def set_lista_remocao(conn, pacotes):
+    """Salva a lista de apps a remover (sem duplicatas, ordenada)."""
+    limpos = sorted({p.strip() for p in pacotes if p.strip()})
+    set_config(conn, "apps_remocao", "\n".join(limpos))
+
+
 def listar_filhos(conn, pai_id):
     """Lista os acessórios vinculados a um dispositivo pai (ex: mouse do PC)."""
     return conn.execute(

@@ -24,6 +24,10 @@ Recursos:
   - APARELHOS ANDROID via USB (menu Ferramentas): detectar e cadastrar
     automaticamente (marca/modelo/nº série) e gerenciar apps do aparelho
     (desinstalar, forçar parada). Requer "Depuração USB" ligada no aparelho.
+  - PREPARAR TABLET (1 clique): detecta > cadastra/atualiza (sem duplicar pelo
+    nº de série) > remove os apps da "Lista de remoção" > "Concluído". Ideal
+    para preparar vários tablets em sequência. A Lista de remoção você monta
+    uma vez (menu Ferramentas > Lista de remoção, ou pelo "Gerenciar apps").
   - Gerar ETIQUETAS com código de barras (Code 39) para imprimir e colar
     -> ótimo para os itens sem patrimônio de fábrica (teclado, mouse, cabos)
   - Exportar para Excel (CSV) e gerar RELATÓRIO em PDF (via navegador)
