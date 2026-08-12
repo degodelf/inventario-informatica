@@ -22,14 +22,14 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar dependências
-        run: python -m pip install --upgrade pip pyinstaller sv-ttk
+        run: python -m pip install --upgrade pip pyinstaller sv-ttk pillow
 
-      - name: Gerar o ícone a partir da logo
-        run: python png_para_ico.py logo_jq.png logo_jq.ico
+      - name: Gerar o ícone (vários tamanhos) a partir da logo
+        run: python -c "from PIL import Image; Image.open('logo_jq.png').save('logo_jq.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128)])"
 
       - name: Compilar o .exe
         shell: cmd
-        run: python -m PyInstaller --onefile --windowed --icon logo_jq.ico --add-data "logo_jq.png;." --add-data "adb;adb" --collect-all sv_ttk --name Inventario app.py
+        run: python -m PyInstaller --onefile --windowed --icon logo_jq.ico --add-data "logo_jq.png;." --add-data "logo_jq.ico;." --add-data "adb;adb" --collect-all sv_ttk --name Inventario app.py
 
       - name: Criar a release e anexar o .exe
         env:

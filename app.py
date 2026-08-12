@@ -753,7 +753,11 @@ class App(tk.Tk):
             if sys.platform.startswith("win"):
                 ico = _recurso("logo_jq.ico")
                 if os.path.exists(ico):
-                    self.iconbitmap(default=ico)   # vale p/ esta e as próximas janelas
+                    self.iconbitmap(ico)               # ícone DESTA janela (barra de título)
+                    try:
+                        self.iconbitmap(default=ico)   # e das próximas janelas
+                    except Exception:  # noqa: BLE001
+                        pass
         except Exception:  # noqa: BLE001
             pass
         # iconphoto (PNG) cobre a barra de tarefas / outros sistemas
