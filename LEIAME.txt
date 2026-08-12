@@ -22,6 +22,10 @@ Recursos:
     salva e aparece nas próximas
   - "Local" já vem preenchido com "Informática" em cadastros novos
   - Ao salvar um item novo, os filtros são limpos e o item aparece na hora
+  - CLIQUE no cabeçalho da coluna para ORDENAR a tabela (clique de novo inverte)
+  - Botão "🔄 Atualizar" para recarregar a lista a qualquer momento
+  - Removida a coluna "#" (número interno) — fica só o seu "ID" de 2 dígitos
+  - Ícone do programa corrigido (barra de título mostra a logo, não a peninha)
   - Item recém-salvo já aparece SELECIONADO na lista
   - Versão do sistema visível no rodapé (canto inferior direito)
   - Miniatura de foto do item (formato PNG/GIF)

@@ -18,7 +18,7 @@ import urllib.request
 
 # Versão ATUAL deste programa. Suba este número a cada nova versão publicada
 # (e crie a release no GitHub com a tag igual, ex: v1.1.0).
-VERSAO = "1.8.0"
+VERSAO = "1.9.0"
 
 # Dados do GitHub (repositório onde você publica as releases):
 GITHUB_USUARIO = "degodelf"

@@ -702,6 +702,7 @@ class App(tk.Tk):
         self.conn = conn                 # conexão já aberta (arquivo ou memória)
         self.cifrado = cifrado           # True = banco criptografado (fica na RAM)
         self.senha_cripto = senha_cripto # senha do banco, guardada só nesta sessão
+        self._ordem_reversa = {}         # estado de ordenação por coluna
         self.geometry("1040x620")
         self.minsize(900, 520)
         self.title(self._titulo())
@@ -747,10 +748,19 @@ class App(tk.Tk):
 
     def _definir_icone_janela(self):
         """Coloca a logo JQ como ícone da janela (no lugar da peninha padrão)."""
+        # No Windows, iconbitmap(.ico) é o jeito CONFIÁVEL para a barra de título.
+        try:
+            if sys.platform.startswith("win"):
+                ico = _recurso("logo_jq.ico")
+                if os.path.exists(ico):
+                    self.iconbitmap(default=ico)   # vale p/ esta e as próximas janelas
+        except Exception:  # noqa: BLE001
+            pass
+        # iconphoto (PNG) cobre a barra de tarefas / outros sistemas
         try:
             self._icone_janela = tk.PhotoImage(file=_recurso("logo_jq.png"))
-            self.iconphoto(True, self._icone_janela)   # vale para esta e as próximas janelas
-        except Exception:
+            self.iconphoto(True, self._icone_janela)
+        except Exception:  # noqa: BLE001
             pass
 
     def _montar(self):
@@ -828,6 +838,7 @@ class App(tk.Tk):
         ttk.Button(acoes, text="Editar", command=self._editar).pack(side="left", padx=4)
         ttk.Button(acoes, text="Excluir", command=self._excluir).pack(side="left")
         ttk.Button(acoes, text="Manutenções…", command=self._manutencoes).pack(side="left", padx=4)
+        ttk.Button(acoes, text="🔄 Atualizar", command=self._recarregar).pack(side="left")
         ttk.Button(acoes, text="🏷️ Etiquetas", command=self._etiquetas).pack(side="right")
         ttk.Button(acoes, text="📄 Relatório/PDF", command=self._relatorio).pack(side="right", padx=4)
         ttk.Button(acoes, text="Exportar CSV", command=self._exportar).pack(side="right")
@@ -836,20 +847,21 @@ class App(tk.Tk):
         quadro = ttk.Frame(self, padding=10)
         quadro.pack(fill="both", expand=True)
 
-        cols = ("id", "id_curto", "patrimonio", "categoria", "marca", "modelo",
+        cols = ("id_curto", "patrimonio", "categoria", "marca", "modelo",
                 "status", "local", "responsavel")
         self.tree = ttk.Treeview(quadro, columns=cols, show="headings")
         larguras = {
-            "id": 40, "id_curto": 55, "patrimonio": 110, "categoria": 130, "marca": 100,
-            "modelo": 140, "status": 100, "local": 120, "responsavel": 110,
+            "id_curto": 55, "patrimonio": 120, "categoria": 140, "marca": 110,
+            "modelo": 150, "status": 110, "local": 130, "responsavel": 120,
         }
         titulos = {
-            "id": "#", "id_curto": "ID", "patrimonio": "Patrimônio", "categoria": "Categoria",
+            "id_curto": "ID", "patrimonio": "Patrimônio", "categoria": "Categoria",
             "marca": "Marca", "modelo": "Modelo", "status": "Status",
             "local": "Local", "responsavel": "Responsável",
         }
         for c in cols:
-            self.tree.heading(c, text=titulos[c])
+            # cabeçalho clicável: ordena por aquela coluna
+            self.tree.heading(c, text=titulos[c], command=lambda col=c: self._ordenar(col))
             self.tree.column(c, width=larguras[c], anchor="w")
         vsb = ttk.Scrollbar(quadro, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
@@ -906,7 +918,7 @@ class App(tk.Tk):
             self.tree.insert(
                 "", "end", iid=str(d["id"]),
                 values=(
-                    d["id"], d["id_curto"] or "", d["patrimonio"] or "", d["categoria"],
+                    d["id_curto"] or "", d["patrimonio"] or "", d["categoria"],
                     d["marca"] or "", d["modelo"] or "", d["status"], d["local"] or "",
                     d["responsavel"] or "",
                 ),
@@ -925,6 +937,26 @@ class App(tk.Tk):
             self.lbl_vazio.place(relx=0.5, rely=0.45, anchor="center")
         else:
             self.lbl_vazio.place_forget()
+
+        # força o redesenho imediato da tabela (evita "só aparece após reiniciar")
+        self.tree.update_idletasks()
+
+    def _ordenar(self, col):
+        """Ordena a tabela pela coluna clicada (alterna crescente/decrescente)."""
+        reverso = self._ordem_reversa.get(col, False)
+        itens = [(self.tree.set(k, col), k) for k in self.tree.get_children("")]
+
+        def chave(par):
+            v = (par[0] or "").strip()
+            try:
+                return (0, float(v.replace(",", ".")))   # números (ex: ID) na ordem certa
+            except ValueError:
+                return (1, v.lower())                    # texto, sem diferenciar maiúscula
+
+        itens.sort(key=chave, reverse=reverso)
+        for i, (_v, k) in enumerate(itens):
+            self.tree.move(k, "", i)
+        self._ordem_reversa[col] = not reverso
 
     def _id_selecionado(self):
         sel = self.tree.selection()
