@@ -1653,7 +1653,20 @@ def _abrir_sessao_banco(parent):
     return (conn, False, None)
 
 
+def _definir_appid():
+    """Faz o Windows tratar o programa como um app próprio, usando o ÍCONE dele
+    na barra de tarefas (sem isso, mostra a peninha padrão)."""
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "JQSolucoesTI.Inventario.SalaInformatica")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def main():
+    _definir_appid()                      # ícone certo na barra de tarefas
     raiz = tk.Tk()
     raiz.withdraw()                       # janela invisível só para os diálogos iniciais
     sessao = _abrir_sessao_banco(raiz)
