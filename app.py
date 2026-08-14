@@ -15,7 +15,7 @@ import shutil
 import sqlite3
 import threading
 import webbrowser
-from datetime import datetime
+from datetime import datetime, date
 
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
@@ -155,6 +155,50 @@ def fmt_valor(v):
         return "R$ " + f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except (ValueError, TypeError):
         return str(v)
+
+
+def _parse_data(txt):
+    """Tenta entender uma data digitada em vários formatos comuns. Retorna um
+    date, ou None se não reconhecer (o campo é texto livre)."""
+    txt = (txt or "").strip()
+    if not txt:
+        return None
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(txt, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _estado_garantia(txt, aviso_dias=30):
+    """Classifica a garantia: 'vencida', 'perto' (vence em até `aviso_dias`) ou
+    '' (ok / sem data reconhecível)."""
+    d = _parse_data(txt)
+    if d is None:
+        return ""
+    dias = (d - date.today()).days
+    if dias < 0:
+        return "vencida"
+    if dias <= aviso_dias:
+        return "perto"
+    return ""
+
+
+def _apagar_arquivo_gerenciado(caminho):
+    """Apaga um arquivo SOMENTE se ele estiver dentro da pasta 'anexos' (criada
+    pelo programa). Nunca apaga arquivos do usuário fora dela — ex.: fotos, que
+    são apenas referenciadas no lugar de origem, não copiadas."""
+    if not caminho:
+        return
+    try:
+        alvo = caminho if os.path.isabs(caminho) else os.path.join(BASE_DIR, caminho)
+        alvo = os.path.abspath(alvo)
+        raiz = os.path.abspath(ANEXOS_DIR)
+        if os.path.commonpath([alvo, raiz]) == raiz and os.path.isfile(alvo):
+            os.remove(alvo)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def abrir_arquivo(caminho):
@@ -608,6 +652,11 @@ class JanelaManutencoes(tk.Toplevel):
         if not mid:
             return
         if messagebox.askyesno("Excluir", "Excluir este registro de manutenção?"):
+            # apaga o anexo (arquivo na pasta 'anexos') junto com o registro
+            for m in db.listar_manutencoes(self.conn, self.disp["id"]):
+                if m["id"] == mid and m["anexo_path"]:
+                    _apagar_arquivo_gerenciado(m["anexo_path"])
+                    break
             db.excluir_manutencao(self.conn, mid)
             self._recarregar()
 
@@ -835,6 +884,9 @@ class App(tk.Tk):
 
         self.var_limpar_chrome = tk.BooleanVar(
             value=db.get_config(self.conn, "limpar_chrome_preparar", "0") == "1")
+        # atualização automática: ligada por padrão (baixa/instala sozinha no início)
+        self.var_auto_update = tk.BooleanVar(
+            value=db.get_config(self.conn, "auto_update", "1") == "1")
 
         self._aplicar_tema(db.get_config(self.conn, "tema", "light"))
         self._definir_icone_janela()
@@ -897,6 +949,10 @@ class App(tk.Tk):
     def _montar(self):
         # Menu superior
         menubar = tk.Menu(self)
+        m_arq = tk.Menu(menubar, tearoff=0)
+        m_arq.add_command(label="💾 Fazer backup agora…", command=self._fazer_backup)
+        m_arq.add_command(label="♻️ Restaurar backup…", command=self._restaurar_backup)
+        menubar.add_cascade(label="Arquivo", menu=m_arq)
         m_rel = tk.Menu(menubar, tearoff=0)
         m_rel.add_command(label="Exportar para Excel (CSV)", command=self._exportar)
         m_rel.add_command(label="Relatório / PDF (navegador)", command=self._relatorio)
@@ -935,6 +991,9 @@ class App(tk.Tk):
         m_aj = tk.Menu(menubar, tearoff=0)
         m_aj.add_command(label="Verificar atualização agora",
                          command=lambda: self._verificar_atualizacao(manual=True))
+        m_aj.add_checkbutton(label="Atualizar automaticamente",
+                             variable=self.var_auto_update,
+                             command=self._salvar_toggle_auto_update)
         m_aj.add_command(label="Sobre", command=self._sobre)
         menubar.add_cascade(label="Ajuda", menu=m_aj)
         self.config(menu=menubar)
@@ -947,19 +1006,25 @@ class App(tk.Tk):
         self.var_busca = tk.StringVar()
         e = ttk.Entry(topo, textvariable=self.var_busca, width=28)
         e.pack(side="left", padx=(4, 10))
+        # busca AO VIVO: a lista se atualiza sozinha enquanto digita (com uma
+        # pequena espera para não recarregar a cada tecla)
+        e.bind("<KeyRelease>", self._agendar_busca)
         e.bind("<Return>", lambda ev: self._recarregar())
 
         ttk.Label(topo, text="Categoria:").pack(side="left")
         self.var_cat = tk.StringVar()
-        ttk.Combobox(topo, textvariable=self.var_cat, values=[""] + db.CATEGORIAS,
-                     width=18, state="readonly").pack(side="left", padx=(4, 10))
+        cb_cat = ttk.Combobox(topo, textvariable=self.var_cat, values=[""] + db.CATEGORIAS,
+                              width=18, state="readonly")
+        cb_cat.pack(side="left", padx=(4, 10))
+        cb_cat.bind("<<ComboboxSelected>>", lambda ev: self._recarregar())
 
         ttk.Label(topo, text="Status:").pack(side="left")
         self.var_stat = tk.StringVar()
-        ttk.Combobox(topo, textvariable=self.var_stat, values=[""] + db.STATUS,
-                     width=14, state="readonly").pack(side="left", padx=(4, 10))
+        cb_stat = ttk.Combobox(topo, textvariable=self.var_stat, values=[""] + db.STATUS,
+                               width=14, state="readonly")
+        cb_stat.pack(side="left", padx=(4, 10))
+        cb_stat.bind("<<ComboboxSelected>>", lambda ev: self._recarregar())
 
-        ttk.Button(topo, text="Filtrar", command=self._recarregar).pack(side="left")
         ttk.Button(topo, text="Limpar", command=self._limpar_filtros).pack(side="left", padx=4)
 
         # Botões de ação
@@ -979,16 +1044,17 @@ class App(tk.Tk):
         quadro.pack(fill="both", expand=True)
 
         cols = ("id_curto", "patrimonio", "categoria", "marca", "modelo",
-                "status", "local", "responsavel")
+                "status", "local", "responsavel", "garantia")
         self.tree = ttk.Treeview(quadro, columns=cols, show="headings")
         larguras = {
-            "id_curto": 55, "patrimonio": 120, "categoria": 140, "marca": 110,
-            "modelo": 150, "status": 110, "local": 130, "responsavel": 120,
+            "id_curto": 50, "patrimonio": 110, "categoria": 130, "marca": 100,
+            "modelo": 140, "status": 100, "local": 115, "responsavel": 110,
+            "garantia": 95,
         }
         titulos = {
             "id_curto": "ID", "patrimonio": "Patrimônio", "categoria": "Categoria",
             "marca": "Marca", "modelo": "Modelo", "status": "Status",
-            "local": "Local", "responsavel": "Responsável",
+            "local": "Local", "responsavel": "Responsável", "garantia": "Garantia",
         }
         for c in cols:
             # cabeçalho clicável: ordena por aquela coluna
@@ -1012,6 +1078,9 @@ class App(tk.Tk):
         # cor de fundo diferente por status "problema"
         self.tree.tag_configure("quebrado", background="#ffe0e0")
         self.tree.tag_configure("manutencao", background="#fff3cd")
+        # cor do TEXTO por situação da garantia (combina com o fundo do status)
+        self.tree.tag_configure("garantia_vencida", foreground="#c0392b")
+        self.tree.tag_configure("garantia_perto", foreground="#d35400")
 
         # Dica no meio da tabela quando não há nada cadastrado (some ao cadastrar)
         self.lbl_vazio = ttk.Label(
@@ -1029,6 +1098,17 @@ class App(tk.Tk):
 
     # ---- ações ----
 
+    def _agendar_busca(self, *_):
+        """Recarrega a lista pouco depois da última tecla (evita recarregar a
+        cada caractere digitado na busca)."""
+        anterior = getattr(self, "_busca_after", None)
+        if anterior:
+            try:
+                self.after_cancel(anterior)
+            except Exception:  # noqa: BLE001
+                pass
+        self._busca_after = self.after(300, self._recarregar)
+
     def _limpar_filtros(self):
         self.var_busca.set("")
         self.var_cat.set("")
@@ -1040,20 +1120,30 @@ class App(tk.Tk):
         linhas = db.listar_dispositivos(
             self.conn, self.var_busca.get(), self.var_cat.get(), self.var_stat.get()
         )
+        n_vencida = n_perto = 0
         for d in linhas:
-            tag = ""
+            tags = []
             if d["status"] == "Quebrado":
-                tag = "quebrado"
+                tags.append("quebrado")
             elif d["status"] == "Em manutenção":
-                tag = "manutencao"
+                tags.append("manutencao")
+            # situação da garantia (só conta itens ainda "vivos")
+            estado_g = ""
+            if d["status"] not in ("Baixado", "Quebrado"):
+                estado_g = _estado_garantia(d["garantia_ate"])
+                if estado_g == "vencida":
+                    tags.append("garantia_vencida"); n_vencida += 1
+                elif estado_g == "perto":
+                    tags.append("garantia_perto"); n_perto += 1
+            marca_g = {"vencida": "⚠ ", "perto": "• "}.get(estado_g, "")
             self.tree.insert(
                 "", "end", iid=str(d["id"]),
                 values=(
                     d["id_curto"] or "", d["patrimonio"] or "", d["categoria"],
                     d["marca"] or "", d["modelo"] or "", d["status"], d["local"] or "",
-                    d["responsavel"] or "",
+                    d["responsavel"] or "", marca_g + (d["garantia_ate"] or ""),
                 ),
-                tags=(tag,) if tag else (),
+                tags=tuple(tags),
             )
         est = db.estatisticas(self.conn)
         partes = [f"Total: {est['total']}"]
@@ -1061,6 +1151,8 @@ class App(tk.Tk):
             n = est["por_status"].get(s, 0)
             if n:
                 partes.append(f"{s}: {n}")
+        if n_vencida or n_perto:
+            partes.append(f"⚠ Garantia: {n_vencida} vencida(s), {n_perto} vencendo")
         self.lbl_status.configure(text="   |   ".join(partes))
 
         # mostra/esconde a dica de lista vazia
@@ -1148,7 +1240,12 @@ class App(tk.Tk):
             "Excluir",
             f"Excluir '{rotulo}'?\n\nO histórico de manutenções dele também será apagado.",
         ):
+            # apaga os anexos das manutenções (arquivos na pasta 'anexos') antes de sumir
+            anexos = [m["anexo_path"] for m in db.listar_manutencoes(self.conn, did)
+                      if m["anexo_path"]]
             db.excluir_dispositivo(self.conn, did)
+            for a in anexos:
+                _apagar_arquivo_gerenciado(a)
             self._recarregar()
             self._persistir()
 
@@ -1173,6 +1270,81 @@ class App(tk.Tk):
             return
         n = db.exportar_csv(self.conn, caminho)
         messagebox.showinfo("Exportado", f"{n} dispositivos exportados para:\n{caminho}")
+
+    def _fazer_backup(self):
+        """Copia o banco (e a pasta de anexos) para uma pasta escolhida.
+        No modo cifrado o backup também fica cifrado (copiamos o arquivo do disco)."""
+        self._persistir()                     # garante o arquivo do disco atualizado
+        if not os.path.exists(DB_PATH):
+            messagebox.showinfo("Backup", "Ainda não há banco de dados para copiar.")
+            return
+        pasta = filedialog.askdirectory(title="Escolha onde salvar o backup")
+        if not pasta:
+            return
+        carimbo = datetime.now().strftime("%Y%m%d_%H%M%S")
+        destino = os.path.join(pasta, f"backup_inventario_{carimbo}")
+        try:
+            os.makedirs(destino, exist_ok=True)
+            shutil.copy2(DB_PATH, os.path.join(destino, "inventario.db"))
+            if os.path.isdir(ANEXOS_DIR) and os.listdir(ANEXOS_DIR):
+                shutil.copytree(ANEXOS_DIR, os.path.join(destino, "anexos"))
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Backup", f"Não consegui fazer o backup:\n{e}")
+            return
+        messagebox.showinfo(
+            "Backup",
+            f"Backup criado com sucesso em:\n{destino}\n\n"
+            "Guarde essa pasta em local seguro (pendrive, nuvem etc.)." +
+            ("\n\nObs.: o banco está criptografado — a senha continua necessária."
+             if self.cifrado else ""),
+        )
+
+    def _restaurar_backup(self):
+        """Substitui o banco atual por um de backup. O programa fecha em seguida
+        (a sessão precisa ser reaberta, pois o backup pode estar criptografado)."""
+        if not messagebox.askyesno(
+            "Restaurar backup",
+            "Isto vai SUBSTITUIR os dados atuais pelos do backup.\n\n"
+            "O que estiver cadastrado agora será perdido (faça um backup antes, "
+            "se tiver dúvida). Continuar?",
+        ):
+            return
+        arq = filedialog.askopenfilename(
+            title="Escolha o arquivo de backup (inventario.db)",
+            filetypes=[("Banco do inventário", "*.db"), ("Todos", "*.*")],
+        )
+        if not arq:
+            return
+        if os.path.abspath(arq) == os.path.abspath(DB_PATH):
+            messagebox.showinfo("Restaurar", "Esse é o banco em uso — escolha um arquivo de backup.")
+            return
+        try:
+            with open(arq, "rb") as f:
+                cabecalho = f.read(len(cripto.MAGIC))
+            # fecha a conexão atual SEM regravar (senão sobrescreveria o restaurado)
+            try:
+                self.conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+            shutil.copy2(arq, DB_PATH)
+            # restaura também a pasta de anexos ao lado do backup, se existir
+            anexos_bkp = os.path.join(os.path.dirname(arq), "anexos")
+            if os.path.isdir(anexos_bkp):
+                os.makedirs(ANEXOS_DIR, exist_ok=True)
+                for nome in os.listdir(anexos_bkp):
+                    org = os.path.join(anexos_bkp, nome)
+                    if os.path.isfile(org):
+                        shutil.copy2(org, os.path.join(ANEXOS_DIR, nome))
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Restaurar", f"Não consegui restaurar:\n{e}")
+            return
+        self._restaurando = True              # evita regravar no fechamento
+        messagebox.showinfo(
+            "Restaurar backup",
+            "Backup restaurado! O programa vai fechar — abra-o de novo para usar "
+            "os dados restaurados.",
+        )
+        self.destroy()
 
     def _filtrados(self):
         """Lista de dispositivos conforme os filtros atuais da tela."""
@@ -1268,6 +1440,8 @@ class App(tk.Tk):
     def _persistir(self):
         """No modo cifrado, regrava o banco (que fica na RAM) criptografado no
         disco. No modo normal, o SQLite já salvou sozinho — não faz nada."""
+        if getattr(self, "_restaurando", False):
+            return                            # banco já foi trocado por um backup
         if not self.cifrado:
             return
         try:
@@ -1506,6 +1680,11 @@ class App(tk.Tk):
                       "1" if self.var_limpar_chrome.get() else "0")
         self._persistir()
 
+    def _salvar_toggle_auto_update(self):
+        db.set_config(self.conn, "auto_update",
+                      "1" if self.var_auto_update.get() else "0")
+        self._persistir()
+
     def _limpar_chrome_agora(self):
         serial = self._obter_serial_android()
         if not serial:
@@ -1674,13 +1853,18 @@ class App(tk.Tk):
             )
             webbrowser.open(res["pagina"])
             return
-        if not messagebox.askyesno(
-            "Atualização disponível",
-            f"Nova versão {res['versao_nova']} disponível!\n"
-            f"(você tem a {atualizacao.VERSAO})\n\n"
-            "Baixar e instalar agora? O programa vai fechar e reabrir sozinho.",
-        ):
-            return
+        # Modo automático: se a checagem foi silenciosa (início do programa) e o
+        # usuário deixou "atualizar automaticamente" ligado, baixa e instala sem
+        # perguntar. Na checagem MANUAL, sempre confirma.
+        auto = (not manual) and self.var_auto_update.get()
+        if not auto:
+            if not messagebox.askyesno(
+                "Atualização disponível",
+                f"Nova versão {res['versao_nova']} disponível!\n"
+                f"(você tem a {atualizacao.VERSAO})\n\n"
+                "Baixar e instalar agora? O programa vai fechar e reabrir sozinho.",
+            ):
+                return
         self._baixar_e_instalar(res["exe_url"])
 
     def _baixar_e_instalar(self, url):

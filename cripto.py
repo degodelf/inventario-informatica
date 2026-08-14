@@ -26,6 +26,11 @@ import struct
 
 MAGIC = b"INVENC01"          # identifica um arquivo cifrado nosso
 ITERACOES_PADRAO = 200_000
+# Limites aceitos ao LER o nº de iterações do cabeçalho (que vem do arquivo).
+# Sem um teto, um arquivo adulterado com um valor absurdo faria o PBKDF2
+# travar o programa ao abrir (negação de serviço). O piso evita cifra fraca.
+ITERACOES_MIN = 50_000
+ITERACOES_MAX = 5_000_000
 TAM_SALT = 16
 TAM_NONCE = 16
 TAM_TAG = 32                 # HMAC-SHA256
@@ -54,7 +59,11 @@ def _keystream(chave_cifra: bytes, nonce: bytes, tamanho: int) -> bytes:
 
 
 def _xor(a: bytes, b: bytes) -> bytes:
-    return bytes(x ^ y for x, y in zip(a, b))
+    """XOR de dois blocos do MESMO tamanho. Feito com inteiros grandes (nível C)
+    em vez de laço byte-a-byte em Python — milhares de vezes mais rápido, o que
+    importa quando o banco tem alguns MB e é regravado a cada alteração."""
+    n = len(a)
+    return (int.from_bytes(a, "big") ^ int.from_bytes(b, "big")).to_bytes(n, "big")
 
 
 def criptografar(dados: bytes, senha: str, iteracoes: int = ITERACOES_PADRAO) -> bytes:
@@ -78,6 +87,8 @@ def descriptografar(dados: bytes, senha: str) -> bytes:
 
     pos = len(MAGIC)
     (iteracoes,) = struct.unpack(">I", dados[pos:pos + 4]); pos += 4
+    if not (ITERACOES_MIN <= iteracoes <= ITERACOES_MAX):
+        raise ValueError("Cabeçalho inválido (nº de iterações fora do esperado).")
     salt = dados[pos:pos + TAM_SALT]; pos += TAM_SALT
     nonce = dados[pos:pos + TAM_NONCE]; pos += TAM_NONCE
     tag = dados[pos:pos + TAM_TAG]; pos += TAM_TAG
