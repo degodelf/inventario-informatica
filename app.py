@@ -28,6 +28,7 @@ import relatorio
 import atualizacao
 import adb
 import mtp
+import specs
 
 # Tema visual moderno (Windows 11). Opcional: se não estiver instalado, o
 # programa continua funcionando com o tema padrão do Tkinter.
@@ -75,6 +76,57 @@ def _barra_titulo(win):
                 hwnd, attr, ctypes.byref(escuro), ctypes.sizeof(escuro)
             )
     except Exception:
+        pass
+
+
+def _garantir_ico():
+    """Caminho do logo_jq.ico. No .exe ele já vem embutido; rodando pelo código
+    (dev) o .ico normalmente não existe — então geramos a partir do PNG, para o
+    ícone da janela/barra de tarefas não cair na 'peninha' padrão do Tk."""
+    ico = _recurso("logo_jq.ico")
+    if os.path.exists(ico):
+        return ico
+    png = _recurso("logo_jq.png")
+    if not os.path.exists(png):
+        return None
+    try:  # preferência: Pillow gera .ico multi-tamanho (nítido)
+        from PIL import Image
+        Image.open(png).save(ico, sizes=[(16, 16), (24, 24), (32, 32),
+                                         (48, 48), (64, 64), (128, 128)])
+        return ico
+    except Exception:  # noqa: BLE001
+        try:  # sem Pillow: embrulha o PNG num .ico (nosso utilitário puro)
+            import png_para_ico
+            png_para_ico.png_para_ico(png, ico)
+            return ico
+        except Exception:  # noqa: BLE001
+            return None
+
+
+def _icone_barra_tarefas(win, ico):
+    """Define o ícone da JANELA via API do Windows (WM_SETICON). É o jeito que a
+    BARRA DE TAREFAS realmente respeita — o iconphoto(PNG) do Tk costuma ser
+    ignorado ali. Sem efeito fora do Windows."""
+    if not sys.platform.startswith("win") or not ico:
+        return
+    try:
+        import ctypes
+
+        IMAGE_ICON = 1
+        LR_LOADFROMFILE = 0x00000010
+        WM_SETICON = 0x0080
+        ICON_SMALL, ICON_BIG = 0, 1
+        user32 = ctypes.windll.user32
+
+        win.update_idletasks()
+        hwnd = user32.GetParent(win.winfo_id())     # janela de topo (moldura)
+        h_peq = user32.LoadImageW(None, ico, IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
+        h_gra = user32.LoadImageW(None, ico, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
+        if h_peq:
+            user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, h_peq)
+        if h_gra:
+            user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_gra)
+    except Exception:  # noqa: BLE001
         pass
 
 
@@ -164,7 +216,7 @@ class FormularioDispositivo(tk.Toplevel):
         _barra_titulo(self)
         self.deiconify()
         self.grab_set()
-        self.vars["patrimonio"].focus_set()   # pronto para o leitor de código
+        self.entry_patrimonio.focus_set()     # pronto para o leitor de código
         self.bind("<Escape>", lambda e: self.destroy())
 
     def _montar(self):
@@ -191,6 +243,7 @@ class FormularioDispositivo(tk.Toplevel):
         # Coluna 0/1
         e_pat = linha("Patrimônio / Cód. barras:", "patrimonio", 0)
         e_pat.configure(width=22)
+        self.entry_patrimonio = e_pat         # guardado p/ dar foco (leitor de código)
         # ID interno de 2 dígitos, ao lado do patrimônio
         ttk.Label(quadro, text="ID (2 díg.):").grid(row=0, column=2, sticky="e", padx=(10, 4))
         self.vars["id_curto"] = tk.StringVar()
@@ -237,21 +290,28 @@ class FormularioDispositivo(tk.Toplevel):
 
         # Miniatura da foto (só PNG/GIF têm pré-visualização sem bibliotecas extras)
         self.lbl_preview = ttk.Label(quadro, anchor="center")
-        self.lbl_preview.grid(row=16, column=0, columnspan=2, pady=(8, 0))
+        self.lbl_preview.grid(row=18, column=0, columnspan=2, pady=(8, 0))
+
+        # Especificações (ficha técnica) + botão que LÊ do aparelho, sem digitar
+        ttk.Label(quadro, text="Especificações:").grid(row=13, column=0, sticky="ne", padx=(0, 8), pady=3)
+        self.txt_especs = tk.Text(quadro, width=34, height=5)
+        self.txt_especs.grid(row=13, column=1, sticky="w", pady=3)
+        self.btn_specs = ttk.Button(quadro, text="🔍 Ler specs", command=self._ler_specs)
+        self.btn_specs.grid(row=13, column=2, columnspan=2, sticky="nw", padx=(10, 0), pady=3)
 
         # Observações
-        ttk.Label(quadro, text="Observações:").grid(row=13, column=0, sticky="ne", padx=(0, 8), pady=3)
+        ttk.Label(quadro, text="Observações:").grid(row=14, column=0, sticky="ne", padx=(0, 8), pady=3)
         self.txt_obs = tk.Text(quadro, width=34, height=3)
-        self.txt_obs.grid(row=13, column=1, sticky="w", pady=3)
+        self.txt_obs.grid(row=14, column=1, sticky="w", pady=3)
 
         # Botões
         botoes = ttk.Frame(quadro)
-        botoes.grid(row=14, column=0, columnspan=2, pady=(12, 0), sticky="e")
+        botoes.grid(row=15, column=0, columnspan=2, pady=(12, 0), sticky="e")
         ttk.Button(botoes, text="Salvar", command=self._salvar).grid(row=0, column=0, padx=4)
         ttk.Button(botoes, text="Cancelar", command=self.destroy).grid(row=0, column=1)
 
         ttk.Label(quadro, text="* obrigatório", foreground="#888").grid(
-            row=15, column=0, columnspan=2, sticky="w", pady=(8, 0)
+            row=16, column=0, columnspan=2, sticky="w", pady=(8, 0)
         )
 
     def _escolher_foto(self):
@@ -289,6 +349,7 @@ class FormularioDispositivo(tk.Toplevel):
                       "data_compra", "garantia_ate"]:
             self.vars[chave].set(d[chave] or "")
         self.vars["valor"].set(fmt_valor(d["valor"]).replace("R$ ", "") if d["valor"] is not None else "")
+        self.txt_especs.insert("1.0", (d["especificacoes"] if "especificacoes" in d.keys() else "") or "")
         self.txt_obs.insert("1.0", d["observacoes"] or "")
         if d["foto_path"]:
             self.lbl_foto.configure(text=os.path.basename(d["foto_path"]))
@@ -304,8 +365,72 @@ class FormularioDispositivo(tk.Toplevel):
             if chave == "observacoes":
                 self.txt_obs.delete("1.0", "end")
                 self.txt_obs.insert("1.0", valor or "")
+            elif chave == "especificacoes":
+                self.txt_especs.delete("1.0", "end")
+                self.txt_especs.insert("1.0", valor or "")
             elif chave in self.vars:
                 self.vars[chave].set(valor or "")
+
+    def _ler_specs(self):
+        """Lê a ficha técnica automaticamente, conforme a categoria:
+        PC/Notebook = do próprio Windows; Celular/Tablet = do aparelho USB."""
+        categoria = self.vars["categoria"].get().strip()
+        if not categoria:
+            messagebox.showwarning("Ler specs", "Escolha a categoria primeiro.", parent=self)
+            return
+
+        if categoria in ("Computador (PC)", "Notebook"):
+            if not messagebox.askyesno(
+                "Ler specs",
+                "Vou ler as especificações DESTE computador (o que está rodando o "
+                "programa) e preencher a ficha técnica.\n\nContinuar?",
+                parent=self,
+            ):
+                return
+            self.config(cursor="watch")
+            self.update_idletasks()
+            try:
+                res = specs.ler_computador()
+            finally:
+                self.config(cursor="")
+        elif categoria in ("Celular", "Tablet"):
+            obter = getattr(self.master, "_obter_serial_android", None)
+            if obter is None:
+                messagebox.showinfo("Ler specs", "Leitura por USB indisponível.", parent=self)
+                return
+            serial = obter()                 # já mostra os avisos de conexão/autorização
+            if not serial:
+                return
+            self.config(cursor="watch")
+            self.update_idletasks()
+            try:
+                res = adb.especificacoes(serial)
+            finally:
+                self.config(cursor="")
+        else:
+            messagebox.showinfo(
+                "Ler specs",
+                "A leitura automática funciona para:\n"
+                "• Computador (PC) e Notebook — lê deste computador\n"
+                "• Celular e Tablet — lê do aparelho conectado por USB\n\n"
+                "Para os demais, preencha a ficha à mão.",
+                parent=self,
+            )
+            return
+
+        if not res.get("ok"):
+            messagebox.showwarning("Ler specs", res.get("erro") or "Não consegui ler.", parent=self)
+            return
+
+        # Preenche a ficha técnica (substitui o conteúdo anterior)
+        self.txt_especs.delete("1.0", "end")
+        self.txt_especs.insert("1.0", res.get("texto", ""))
+        # Preenche marca/modelo/série só se estiverem vazios (não sobrescreve o usuário)
+        for chave in ("marca", "modelo", "numero_serie"):
+            valor = (res.get(chave) or "").strip()
+            if valor and not self.vars[chave].get().strip():
+                self.vars[chave].set(valor)
+        messagebox.showinfo("Ler specs", "Especificações preenchidas! Confira e salve.", parent=self)
 
     def _salvar(self):
         categoria = self.vars["categoria"].get().strip()
@@ -340,6 +465,7 @@ class FormularioDispositivo(tk.Toplevel):
             "valor": parse_valor(self.vars["valor"].get()),
             "pai_id": pai_id,
             "foto_path": self.foto_path,
+            "especificacoes": self.txt_especs.get("1.0", "end").strip() or None,
             "observacoes": self.txt_obs.get("1.0", "end").strip() or None,
         }
         if self.disp:
@@ -748,24 +874,25 @@ class App(tk.Tk):
 
     def _definir_icone_janela(self):
         """Coloca a logo JQ como ícone da janela (no lugar da peninha padrão)."""
-        # No Windows, iconbitmap(.ico) é o jeito CONFIÁVEL para a barra de título.
+        ico = _garantir_ico()
+        # No Windows, iconbitmap(.ico) cuida da barra de título.
         try:
-            if sys.platform.startswith("win"):
-                ico = _recurso("logo_jq.ico")
-                if os.path.exists(ico):
-                    self.iconbitmap(ico)               # ícone DESTA janela (barra de título)
-                    try:
-                        self.iconbitmap(default=ico)   # e das próximas janelas
-                    except Exception:  # noqa: BLE001
-                        pass
+            if sys.platform.startswith("win") and ico:
+                self.iconbitmap(ico)               # ícone DESTA janela (barra de título)
+                try:
+                    self.iconbitmap(default=ico)   # e das próximas janelas
+                except Exception:  # noqa: BLE001
+                    pass
         except Exception:  # noqa: BLE001
             pass
-        # iconphoto (PNG) cobre a barra de tarefas / outros sistemas
+        # iconphoto (PNG) cobre outros sistemas
         try:
             self._icone_janela = tk.PhotoImage(file=_recurso("logo_jq.png"))
             self.iconphoto(True, self._icone_janela)
         except Exception:  # noqa: BLE001
             pass
+        # E o WM_SETICON garante a BARRA DE TAREFAS no Windows (o iconphoto não basta).
+        _icone_barra_tarefas(self, ico)
 
     def _montar(self):
         # Menu superior

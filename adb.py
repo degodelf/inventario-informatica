@@ -160,6 +160,72 @@ def info_dispositivo(serial):
     return base
 
 
+def _ram_total_gb(serial):
+    """RAM total em GB (lida de /proc/meminfo). '' se não conseguir."""
+    saida = _shell(serial, "cat", "/proc/meminfo")
+    for linha in saida.splitlines():
+        if linha.startswith("MemTotal"):
+            digitos = "".join(c for c in linha if c.isdigit())
+            if digitos:
+                gb = int(digitos) / (1024 * 1024)   # kB -> GB
+                return f"{gb:.1f}"
+    return ""
+
+
+def _armazenamento(serial):
+    """Espaço total do armazenamento do usuário (/data), ex '32G'. '' se falhar."""
+    saida = _shell(serial, "df", "-h", "/data")
+    linhas = [l for l in saida.splitlines() if l.strip()]
+    if len(linhas) >= 2:
+        partes = linhas[-1].split()
+        if len(partes) >= 2:
+            return partes[1]        # coluna "Size"
+    return ""
+
+
+def especificacoes(serial):
+    """Monta a ficha técnica (texto) de um aparelho Android já autorizado.
+    Retorna dict {ok, texto, marca, modelo, numero_serie, erro}."""
+    props = _todas_props(serial)
+    if not props:
+        return {"ok": False, "erro": "Não consegui ler as informações do aparelho.",
+                "texto": "", "marca": "", "modelo": "", "numero_serie": ""}
+    info = extrair_info(props, serial)
+
+    ram = _ram_total_gb(serial)
+    arm = _armazenamento(serial)
+    tela = _shell(serial, "wm", "size").replace("Physical size:", "").strip()
+    dens = _shell(serial, "wm", "density").replace("Physical density:", "").strip()
+    android = info.get("versao_android", "")
+    sdk = props.get("ro.build.version.sdk", "")
+    fab = props.get("ro.product.manufacturer", "").title()
+    modelo = info.get("modelo", "")
+
+    linhas = []
+    if fab or modelo:
+        linhas.append(f"Aparelho: {fab} {modelo}".strip())
+    if android:
+        linhas.append(f"Android: {android}" + (f" (API {sdk})" if sdk else ""))
+    if ram:
+        linhas.append(f"Memória RAM: {ram} GB")
+    if arm:
+        linhas.append(f"Armazenamento: {arm}")
+    if tela:
+        linhas.append(f"Tela: {tela}" + (f" ({dens} dpi)" if dens else ""))
+    serie = info.get("numero_serie", "")
+    if serie:
+        linhas.append(f"Nº de série: {serie}")
+
+    return {
+        "ok": True,
+        "erro": "",
+        "texto": "\n".join(linhas),
+        "marca": fab,
+        "modelo": modelo,
+        "numero_serie": serie,
+    }
+
+
 # --- Gerenciamento de aplicativos ---------------------------------------------
 
 def listar_apps(serial, incluir_sistema=False):

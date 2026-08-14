@@ -81,6 +81,7 @@ def criar_tabelas(conn):
             valor         REAL,
             pai_id        INTEGER,                   -- vínculo com o "pai" (ex: mouse -> PC)
             foto_path     TEXT,
+            especificacoes TEXT,                     -- ficha técnica lida do aparelho
             observacoes   TEXT,
             criado_em     TEXT,
             atualizado_em TEXT,
@@ -115,6 +116,8 @@ def criar_tabelas(conn):
     colunas = {row[1] for row in conn.execute("PRAGMA table_info(dispositivos)")}
     if "id_curto" not in colunas:
         conn.execute("ALTER TABLE dispositivos ADD COLUMN id_curto TEXT")
+    if "especificacoes" not in colunas:
+        conn.execute("ALTER TABLE dispositivos ADD COLUMN especificacoes TEXT")
     conn.commit()
 
 
@@ -139,7 +142,7 @@ def set_config(conn, chave, valor):
 CAMPOS_DISPOSITIVO = [
     "patrimonio", "id_curto", "categoria", "marca", "modelo", "numero_serie",
     "status", "local", "responsavel", "data_compra", "garantia_ate",
-    "valor", "pai_id", "foto_path", "observacoes",
+    "valor", "pai_id", "foto_path", "especificacoes", "observacoes",
 ]
 
 
@@ -352,7 +355,7 @@ def exportar_csv(conn, caminho):
 
     linhas = conn.execute(
         "SELECT id, patrimonio, id_curto, categoria, marca, modelo, numero_serie, status, "
-        "local, responsavel, data_compra, garantia_ate, valor, observacoes "
+        "local, responsavel, data_compra, garantia_ate, valor, especificacoes, observacoes "
         "FROM dispositivos ORDER BY categoria, marca"
     ).fetchall()
     with open(caminho, "w", newline="", encoding="utf-8-sig") as f:
@@ -360,7 +363,7 @@ def exportar_csv(conn, caminho):
         w.writerow([
             "ID", "Patrimônio", "ID (2 díg.)", "Categoria", "Marca", "Modelo", "Nº Série",
             "Status", "Local", "Responsável", "Data compra", "Garantia até",
-            "Valor", "Observações",
+            "Valor", "Especificações", "Observações",
         ])
         for r in linhas:
             w.writerow([r[c] if r[c] is not None else "" for c in r.keys()])
