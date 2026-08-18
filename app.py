@@ -898,22 +898,30 @@ class JanelaDetalhes(tk.Toplevel):
         L = []
         L.append(f"{d['categoria']}  {d['marca'] or ''} {d['modelo'] or ''}".rstrip())
         L.append("─" * 52)
+        # Campos sempre mostrados
         campos = [
             ("Patrimônio / Cód. barras", d["patrimonio"]),
             ("ID interno", d["id_curto"]),
             ("Nº de série", d["numero_serie"]),
             ("Status", d["status"]),
             ("Local / Sala", d["local"]),
-            ("Responsável", d["responsavel"]),
-            ("Data de compra", d["data_compra"]),
         ]
-        estado_g = _estado_garantia(d["garantia_ate"])
-        aviso_g = {"vencida": "  ⚠ VENCIDA", "perto": "  • vencendo"}.get(estado_g, "")
-        campos.append(("Garantia até", (d["garantia_ate"] or "") + aviso_g if d["garantia_ate"] else None))
-        campos.append(("Valor", fmt_valor(d["valor"]) or None))
-        campos.append(("Vinculado a", self._rotulo_pai()))
         for rot, val in campos:
             L.append(f"{rot+':':<26} {val if val not in (None, '') else '—'}")
+
+        # Campos legados (saíram do formulário): só aparecem se tiverem valor
+        estado_g = _estado_garantia(d["garantia_ate"])
+        aviso_g = {"vencida": "  ⚠ VENCIDA", "perto": "  • vencendo"}.get(estado_g, "")
+        legados = [
+            ("Responsável", d["responsavel"]),
+            ("Data de compra", d["data_compra"]),
+            ("Garantia até", (d["garantia_ate"] or "") + aviso_g if d["garantia_ate"] else None),
+            ("Valor", fmt_valor(d["valor"]) if d["valor"] is not None else None),
+            ("Vinculado a", self._rotulo_pai() if d["pai_id"] else None),
+        ]
+        for rot, val in legados:
+            if val not in (None, ""):
+                L.append(f"{rot+':':<26} {val}")
 
         L.append("")
         L.append("ESPECIFICAÇÕES")
@@ -1154,17 +1162,16 @@ class App(tk.Tk):
         quadro.pack(fill="both", expand=True)
 
         cols = ("id_curto", "patrimonio", "categoria", "marca", "modelo",
-                "status", "local", "responsavel", "garantia")
+                "status", "local")
         self.tree = ttk.Treeview(quadro, columns=cols, show="headings")
         larguras = {
-            "id_curto": 50, "patrimonio": 110, "categoria": 130, "marca": 100,
-            "modelo": 140, "status": 100, "local": 115, "responsavel": 110,
-            "garantia": 95,
+            "id_curto": 55, "patrimonio": 130, "categoria": 150, "marca": 120,
+            "modelo": 170, "status": 120, "local": 150,
         }
         titulos = {
             "id_curto": "ID", "patrimonio": "Patrimônio", "categoria": "Categoria",
             "marca": "Marca", "modelo": "Modelo", "status": "Status",
-            "local": "Local", "responsavel": "Responsável", "garantia": "Garantia",
+            "local": "Local",
         }
         for c in cols:
             # cabeçalho clicável: ordena por aquela coluna
@@ -1189,9 +1196,6 @@ class App(tk.Tk):
         # cor de fundo diferente por status "problema"
         self.tree.tag_configure("quebrado", background="#ffe0e0")
         self.tree.tag_configure("manutencao", background="#fff3cd")
-        # cor do TEXTO por situação da garantia (combina com o fundo do status)
-        self.tree.tag_configure("garantia_vencida", foreground="#c0392b")
-        self.tree.tag_configure("garantia_perto", foreground="#d35400")
 
         # Dica no meio da tabela quando não há nada cadastrado (some ao cadastrar)
         self.lbl_vazio = ttk.Label(
@@ -1231,28 +1235,17 @@ class App(tk.Tk):
         linhas = db.listar_dispositivos(
             self.conn, self.var_busca.get(), self.var_cat.get(), self.var_stat.get()
         )
-        n_vencida = n_perto = 0
         for d in linhas:
             tags = []
             if d["status"] == "Quebrado":
                 tags.append("quebrado")
             elif d["status"] == "Em manutenção":
                 tags.append("manutencao")
-            # situação da garantia (só conta itens ainda "vivos")
-            estado_g = ""
-            if d["status"] not in ("Baixado", "Quebrado"):
-                estado_g = _estado_garantia(d["garantia_ate"])
-                if estado_g == "vencida":
-                    tags.append("garantia_vencida"); n_vencida += 1
-                elif estado_g == "perto":
-                    tags.append("garantia_perto"); n_perto += 1
-            marca_g = {"vencida": "⚠ ", "perto": "• "}.get(estado_g, "")
             self.tree.insert(
                 "", "end", iid=str(d["id"]),
                 values=(
                     d["id_curto"] or "", d["patrimonio"] or "", d["categoria"],
                     d["marca"] or "", d["modelo"] or "", d["status"], d["local"] or "",
-                    d["responsavel"] or "", marca_g + (d["garantia_ate"] or ""),
                 ),
                 tags=tuple(tags),
             )
@@ -1262,8 +1255,6 @@ class App(tk.Tk):
             n = est["por_status"].get(s, 0)
             if n:
                 partes.append(f"{s}: {n}")
-        if n_vencida or n_perto:
-            partes.append(f"⚠ Garantia: {n_vencida} vencida(s), {n_perto} vencendo")
         self.lbl_status.configure(text="   |   ".join(partes))
 
         # mostra/esconde a dica de lista vazia
