@@ -30,6 +30,7 @@ import adb
 import mtp
 import specs
 import xlsx  # noqa: F401 (usado por db.exportar_xlsx; import garante empacotamento)
+import pdf   # noqa: F401 (usado por relatorio.gerar_pdf; import garante empacotamento)
 
 # Tema visual moderno (Windows 11). Opcional: se não estiver instalado, o
 # programa continua funcionando com o tema padrão do Tkinter.
@@ -1084,7 +1085,8 @@ class App(tk.Tk):
         m_rel = tk.Menu(menubar, tearoff=0)
         m_rel.add_command(label="Exportar para Excel (.xlsx)", command=self._exportar_xlsx)
         m_rel.add_command(label="Exportar para CSV", command=self._exportar)
-        m_rel.add_command(label="Relatório / PDF (navegador)", command=self._relatorio)
+        m_rel.add_command(label="Relatório em PDF (arquivo)", command=self._relatorio_pdf)
+        m_rel.add_command(label="Relatório em HTML (navegador)", command=self._relatorio)
         m_rel.add_command(label="Gerar etiquetas de código de barras", command=self._etiquetas)
         menubar.add_cascade(label="Relatórios", menu=m_rel)
         m_seg = tk.Menu(menubar, tearoff=0)
@@ -1166,7 +1168,7 @@ class App(tk.Tk):
         ttk.Button(acoes, text="Manutenções…", command=self._manutencoes).pack(side="left")
         ttk.Button(acoes, text="🔄 Atualizar", command=self._recarregar).pack(side="left")
         ttk.Button(acoes, text="🏷️ Etiquetas", command=self._etiquetas).pack(side="right")
-        ttk.Button(acoes, text="📄 Relatório/PDF", command=self._relatorio).pack(side="right", padx=4)
+        ttk.Button(acoes, text="📄 Relatório PDF", command=self._relatorio_pdf).pack(side="right", padx=4)
         ttk.Button(acoes, text="📊 Exportar Excel", command=self._exportar_xlsx).pack(side="right")
 
         # Tabela
@@ -1527,6 +1529,30 @@ class App(tk.Tk):
             messagebox.showinfo("Relatório", "Nenhum dispositivo para o relatório.")
             return
         relatorio.gerar_e_abrir(disps, self._descricao_filtro())
+
+    def _relatorio_pdf(self):
+        disps = self._filtrados()
+        if not disps:
+            messagebox.showinfo("Relatório", "Nenhum dispositivo para o relatório.")
+            return
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar relatório em PDF",
+            defaultextension=".pdf",
+            initialfile="relatorio_inventario.pdf",
+            filetypes=[("PDF", "*.pdf")],
+        )
+        if not caminho:
+            return
+        try:
+            relatorio.gerar_pdf(disps, self._descricao_filtro(), caminho)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Relatório", f"Não consegui gerar o PDF:\n{e}")
+            return
+        if messagebox.askyesno(
+            "Relatório em PDF",
+            f"PDF gerado com sucesso:\n{caminho}\n\nAbrir agora?",
+        ):
+            abrir_arquivo(caminho)
 
     def _etiquetas(self):
         # Etiquetas dos itens SELECIONADOS; se nada selecionado, dos filtrados.

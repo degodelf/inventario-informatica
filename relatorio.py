@@ -82,6 +82,74 @@ def gerar_html_relatorio(dispositivos, filtro_desc=""):
 </body></html>"""
 
 
+# --- Relatório em PDF de verdade (arquivo, sem navegador) ---------------------
+
+# (título da coluna, largura em caracteres, alinhar à direita?)
+_COLUNAS_PDF = [
+    ("Patrim.", 12, False), ("Categoria", 16, False), ("Marca", 11, False),
+    ("Modelo", 15, False), ("Nº Série", 14, False), ("Status", 13, False),
+    ("Local", 12, False), ("Responsável", 13, False), ("Garantia", 10, False),
+    ("Valor", 12, True),
+]
+
+
+def _campo(valor, largura, direita):
+    """Encaixa um valor numa coluna de largura fixa (corta com … se passar)."""
+    s = str(valor if valor is not None else "").replace("\n", " ").replace("\r", " ")
+    if len(s) > largura:
+        s = s[:largura - 1] + "…"
+    return s.rjust(largura) if direita else s.ljust(largura)
+
+
+def _linha_colunas(valores):
+    partes = [_campo(v, larg, dir_) for v, (_, larg, dir_) in zip(valores, _COLUNAS_PDF)]
+    return " ".join(partes)
+
+
+def gerar_pdf(dispositivos, filtro_desc="", caminho=None):
+    """Gera um relatório em PDF (arquivo) e retorna o caminho. Paginado, com
+    resumo, cabeçalho repetido e numeração de página."""
+    import os
+    import pdf
+
+    if caminho is None:
+        caminho = os.path.join(
+            tempfile.gettempdir(),
+            f"relatorio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+        )
+
+    # resumo: total, valor estimado e contagem por status
+    total_valor = 0.0
+    por_status = {}
+    for d in dispositivos:
+        if d["valor"]:
+            total_valor += float(d["valor"])
+        por_status[d["status"]] = por_status.get(d["status"], 0) + 1
+    status_txt = "  ".join(f"{s}: {n}" for s, n in sorted(por_status.items()))
+
+    resumo = [
+        f"Total de itens: {len(dispositivos)}    Valor estimado: {_fmt_valor(total_valor)}",
+    ]
+    if status_txt:
+        resumo.append("Por status: " + status_txt)
+
+    cabecalho = _linha_colunas([c[0] for c in _COLUNAS_PDF])
+    linhas = [
+        _linha_colunas([
+            d["patrimonio"], d["categoria"], d["marca"], d["modelo"],
+            d["numero_serie"], d["status"], d["local"], d["responsavel"],
+            d["garantia_ate"], _fmt_valor(d["valor"]),
+        ])
+        for d in dispositivos
+    ]
+
+    gerado = datetime.now().strftime("%d/%m/%Y %H:%M")
+    info = f"Gerado em {gerado}" + (f" — {filtro_desc}" if filtro_desc else "")
+    pdf.gerar(caminho, "Inventário da Sala de Informática", info, resumo,
+              cabecalho, linhas)
+    return caminho
+
+
 def gerar_e_abrir(dispositivos, filtro_desc=""):
     """Gera o relatório e abre no navegador. Retorna o caminho do arquivo."""
     html = gerar_html_relatorio(dispositivos, filtro_desc)
