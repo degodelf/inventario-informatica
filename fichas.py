@@ -68,21 +68,27 @@ CATALOGO = [
 
     # ---- Multilaser (muitas variacoes de SKU; config tipica) ----
     {"marca": "multilaser", "modelo": "m10", "ficha":
-        "Aparelho: Multilaser M10 (linha 10,1\")\n"
+        "Aparelho: Multilaser M10 (linha 10,1\" — inclui M10/M10A/4G/Pro)\n"
         "Tela: 10,1\" IPS, 1280x800\n"
-        "Processador: quad-core ARM Cortex-A7\n"
-        "Memoria RAM: 2 GB (ha versoes de 1 GB)\n"
-        "Armazenamento: 32 GB (microSD)\n"
-        "Conectividade: Wi-Fi (+ 3G/4G em alguns modelos)\n"
-        "Sistema: Android (Go/normal, conforme a versao)"},
+        "Processador: quad-core ARM Cortex-A7 (~1.3–1.6 GHz)\n"
+        "Chip grafico: Mali-400 / IMG GE8300 (conforme a versao)\n"
+        "Memoria RAM: 2 GB (algumas versoes com 1 GB)\n"
+        "Armazenamento: 32 GB (expansivel por microSD ate 128 GB)\n"
+        "Conectividade: Wi-Fi; versoes 4G com dual SIM e GPS; Bluetooth\n"
+        "Bateria: ~5.000 mAh\n"
+        "Cameras: 5 MP (traseira) / 2 MP (frontal)\n"
+        "Entradas: USB, P2 (fone), slot microSD\n"
+        "Sistema: Android 10/11 (edicao Go)"},
     {"marca": "multilaser", "modelo": "m7", "ficha":
-        "Aparelho: Multilaser M7 (linha 7\")\n"
+        "Aparelho: Multilaser M7 (linha 7\" — inclui M7/M7S/Plus/3G)\n"
         "Tela: 7\" IPS, 1024x600\n"
         "Processador: quad-core ARM Cortex-A7\n"
-        "Memoria RAM: 1 GB (ha versoes de 2 GB)\n"
-        "Armazenamento: 16 GB (microSD)\n"
-        "Conectividade: Wi-Fi (+ 3G em alguns modelos)\n"
-        "Sistema: Android Go"},
+        "Memoria RAM: 1 GB (ha versoes com 2 GB)\n"
+        "Armazenamento: 16 ou 32 GB (expansivel por microSD)\n"
+        "Conectividade: Wi-Fi; versoes 3G com dual SIM; Bluetooth\n"
+        "Bateria: ~2.800–3.000 mAh\n"
+        "Cameras: 2 MP (traseira) / VGA-2 MP (frontal)\n"
+        "Sistema: Android Go (8.1/9/10, conforme a versao)"},
 
     # ---- Positivo ----
     {"marca": "positivo", "modelo": "twist tab", "ficha":

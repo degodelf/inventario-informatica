@@ -52,6 +52,11 @@ else:
 DB_PATH = os.path.join(BASE_DIR, "inventario.db")
 ANEXOS_DIR = os.path.join(BASE_DIR, "anexos")
 
+# Rodapé que o catálogo põe nas fichas — também serve de marca para reconhecer
+# (e poder ATUALIZAR) o que foi preenchido pelo catálogo. NÃO mude o texto sem
+# atualizar a detecção "ficha de refer" em _preencher_specs_auto.
+FICHA_NOTA = "\n\n(ficha de referência do modelo — confira RAM/armazenamento reais)"
+
 
 def _recurso(nome):
     """Caminho de um arquivo EMPACOTADO (logo, etc.). No .exe onefile os
@@ -306,60 +311,41 @@ class FormularioDispositivo(tk.Toplevel):
         linha("Nº de série:", "numero_serie", 4)
         combo("Status: *", "status", db.STATUS, 5)
         linha("Local / Sala:", "local", 6)
-        linha("Responsável:", "responsavel", 7)
-        linha("Data de compra:", "data_compra", 8)
-        linha("Garantia até:", "garantia_ate", 9)
-        linha("Valor (R$):", "valor", 10)
-
-        # Vínculo com "pai" (ex: mouse -> PC)
-        ttk.Label(quadro, text="Vinculado a:").grid(row=11, column=0, sticky="e", padx=(0, 8), pady=3)
-        self.pai_opcoes = [("(nenhum)", None)] + [
-            (rot, i) for (i, rot) in db.opcoes_pai(
-                self.conn, self.disp["id"] if self.disp else None
-            )
-        ]
-        self.var_pai = tk.StringVar(value="(nenhum)")
-        self.combo_pai = ttk.Combobox(
-            quadro, textvariable=self.var_pai,
-            values=[rot for (rot, _) in self.pai_opcoes],
-            width=32, state="readonly",
-        )
-        self.combo_pai.grid(row=11, column=1, sticky="w", pady=3)
 
         # Foto
-        ttk.Label(quadro, text="Foto:").grid(row=12, column=0, sticky="e", padx=(0, 8), pady=3)
+        ttk.Label(quadro, text="Foto:").grid(row=7, column=0, sticky="e", padx=(0, 8), pady=3)
         quadro_foto = ttk.Frame(quadro)
-        quadro_foto.grid(row=12, column=1, sticky="w", pady=3)
+        quadro_foto.grid(row=7, column=1, sticky="w", pady=3)
         self.lbl_foto = ttk.Label(quadro_foto, text="(nenhuma)", width=24)
         self.lbl_foto.grid(row=0, column=0, sticky="w")
         ttk.Button(quadro_foto, text="Escolher…", command=self._escolher_foto).grid(row=0, column=1, padx=4)
         ttk.Button(quadro_foto, text="Ver", command=self._ver_foto).grid(row=0, column=2)
 
-        # Miniatura da foto (só PNG/GIF têm pré-visualização sem bibliotecas extras)
-        self.lbl_preview = ttk.Label(quadro, anchor="center")
-        self.lbl_preview.grid(row=18, column=0, columnspan=2, pady=(8, 0))
-
         # Especificações (ficha técnica) + botão que LÊ do aparelho, sem digitar
-        ttk.Label(quadro, text="Especificações:").grid(row=13, column=0, sticky="ne", padx=(0, 8), pady=3)
-        self.txt_especs = tk.Text(quadro, width=34, height=5)
-        self.txt_especs.grid(row=13, column=1, sticky="w", pady=3)
+        ttk.Label(quadro, text="Especificações:").grid(row=8, column=0, sticky="ne", padx=(0, 8), pady=3)
+        self.txt_especs = tk.Text(quadro, width=34, height=6)
+        self.txt_especs.grid(row=8, column=1, sticky="w", pady=3)
         self.btn_specs = ttk.Button(quadro, text="🔍 Ler specs", command=self._ler_specs)
-        self.btn_specs.grid(row=13, column=2, columnspan=2, sticky="nw", padx=(10, 0), pady=3)
+        self.btn_specs.grid(row=8, column=2, columnspan=2, sticky="nw", padx=(10, 0), pady=3)
 
         # Observações
-        ttk.Label(quadro, text="Observações:").grid(row=14, column=0, sticky="ne", padx=(0, 8), pady=3)
+        ttk.Label(quadro, text="Observações:").grid(row=9, column=0, sticky="ne", padx=(0, 8), pady=3)
         self.txt_obs = tk.Text(quadro, width=34, height=3)
-        self.txt_obs.grid(row=14, column=1, sticky="w", pady=3)
+        self.txt_obs.grid(row=9, column=1, sticky="w", pady=3)
 
         # Botões
         botoes = ttk.Frame(quadro)
-        botoes.grid(row=15, column=0, columnspan=2, pady=(12, 0), sticky="e")
+        botoes.grid(row=10, column=0, columnspan=2, pady=(12, 0), sticky="e")
         ttk.Button(botoes, text="Salvar", command=self._salvar).grid(row=0, column=0, padx=4)
         ttk.Button(botoes, text="Cancelar", command=self.destroy).grid(row=0, column=1)
 
         ttk.Label(quadro, text="* obrigatório", foreground="#888").grid(
-            row=16, column=0, columnspan=2, sticky="w", pady=(8, 0)
+            row=11, column=0, columnspan=2, sticky="w", pady=(8, 0)
         )
+
+        # Miniatura da foto (só PNG/GIF têm pré-visualização sem bibliotecas extras)
+        self.lbl_preview = ttk.Label(quadro, anchor="center")
+        self.lbl_preview.grid(row=12, column=0, columnspan=2, pady=(8, 0))
 
     def _escolher_foto(self):
         caminho = filedialog.askopenfilename(
@@ -392,19 +378,12 @@ class FormularioDispositivo(tk.Toplevel):
 
     def _preencher(self, d):
         for chave in ["patrimonio", "id_curto", "categoria", "marca", "modelo",
-                      "numero_serie", "status", "local", "responsavel",
-                      "data_compra", "garantia_ate"]:
+                      "numero_serie", "status", "local"]:
             self.vars[chave].set(d[chave] or "")
-        self.vars["valor"].set(fmt_valor(d["valor"]).replace("R$ ", "") if d["valor"] is not None else "")
         self.txt_especs.insert("1.0", (d["especificacoes"] if "especificacoes" in d.keys() else "") or "")
         self.txt_obs.insert("1.0", d["observacoes"] or "")
         if d["foto_path"]:
             self.lbl_foto.configure(text=os.path.basename(d["foto_path"]))
-        # pai
-        for rot, i in self.pai_opcoes:
-            if i == d["pai_id"]:
-                self.var_pai.set(rot)
-                break
 
     def _aplicar_preset(self, preset):
         """Pré-preenche campos ao criar um item novo (ex: dados detectados por USB)."""
@@ -507,14 +486,9 @@ class FormularioDispositivo(tk.Toplevel):
             ):
                 return
 
-        # id do pai selecionado
-        pai_id = None
-        rotulo_pai = self.var_pai.get()
-        for rot, i in self.pai_opcoes:
-            if rot == rotulo_pai:
-                pai_id = i
-                break
-
+        # Campos removidos do formulário: preserva o que já existia no item
+        # (ao editar), para não apagar dados antigos; em item novo, ficam vazios.
+        d = self.disp
         dados = {
             "patrimonio": self.vars["patrimonio"].get().strip() or None,
             "id_curto": self.vars["id_curto"].get().strip() or None,
@@ -524,11 +498,11 @@ class FormularioDispositivo(tk.Toplevel):
             "numero_serie": self.vars["numero_serie"].get().strip() or None,
             "status": status,
             "local": self.vars["local"].get().strip() or None,
-            "responsavel": self.vars["responsavel"].get().strip() or None,
-            "data_compra": self.vars["data_compra"].get().strip() or None,
-            "garantia_ate": self.vars["garantia_ate"].get().strip() or None,
-            "valor": parse_valor(self.vars["valor"].get()),
-            "pai_id": pai_id,
+            "responsavel": d["responsavel"] if d else None,
+            "data_compra": d["data_compra"] if d else None,
+            "garantia_ate": d["garantia_ate"] if d else None,
+            "valor": d["valor"] if d else None,
+            "pai_id": d["pai_id"] if d else None,
             "foto_path": self.foto_path,
             "especificacoes": self.txt_especs.get("1.0", "end").strip() or None,
             "observacoes": self.txt_obs.get("1.0", "end").strip() or None,
@@ -1365,16 +1339,23 @@ class App(tk.Tk):
         """Varre os itens SEM especificações e preenche a ficha técnica do
         modelo reconhecido no catálogo (fichas.py). Não sobrescreve nada que já
         exista e não altera nº de série / identificador do aparelho."""
+        # Marca que o próprio programa põe nas fichas do catálogo — serve para
+        # reconhecer o que veio do catálogo (pode ser ATUALIZADO) e diferenciar
+        # de specs digitadas à mão (essas nunca são tocadas).
+        MARCA_CATALOGO = "ficha de refer"
+
         itens = db.listar_dispositivos(self.conn)
         achados = []
         nao_reconhecidos = []
         for d in itens:
-            if (d["especificacoes"] or "").strip():
-                continue                       # já tem specs -> não mexe
+            esp = (d["especificacoes"] or "").strip()
+            do_catalogo = MARCA_CATALOGO in esp.lower()
+            if esp and not do_catalogo:
+                continue                       # specs digitadas à mão -> não mexe
             ficha = fichas.buscar(d["marca"] or "", d["modelo"] or "")
-            if ficha:
+            if ficha and ficha + FICHA_NOTA != esp:   # pula se já está igual
                 achados.append((d, ficha))
-            elif d["categoria"] in ("Tablet", "Celular"):
+            elif not esp and d["categoria"] in ("Tablet", "Celular"):
                 nao_reconhecidos.append(d)
 
         if not achados:
@@ -1401,10 +1382,9 @@ class App(tk.Tk):
         ):
             return
 
-        nota = "\n\n(ficha de referência do modelo — confira RAM/armazenamento reais)"
         for d, ficha in achados:
             dados = {c: d[c] for c in db.CAMPOS_DISPOSITIVO}
-            dados["especificacoes"] = ficha + nota
+            dados["especificacoes"] = ficha + FICHA_NOTA
             db.atualizar_dispositivo(self.conn, d["id"], dados)
         self._persistir()
         self._recarregar()
