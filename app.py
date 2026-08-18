@@ -29,6 +29,7 @@ import atualizacao
 import adb
 import mtp
 import specs
+import fichas
 import xlsx  # noqa: F401 (usado por db.exportar_xlsx; import garante empacotamento)
 import pdf   # noqa: F401 (usado por relatorio.gerar_pdf; import garante empacotamento)
 
@@ -1099,6 +1100,9 @@ class App(tk.Tk):
         m_fer.add_command(label="⚡ Preparar tablet (provisionar)…",
                           command=self._preparar_tablet)
         m_fer.add_separator()
+        m_fer.add_command(label="🧠 Preencher especificações pelo modelo…",
+                          command=self._preencher_specs_auto)
+        m_fer.add_separator()
         m_fer.add_command(label="Detectar por cabo — MTP (sem depuração)…",
                           command=self._detectar_mtp)
         m_fer.add_command(label="Detectar via depuração — ADB (avançado)…",
@@ -1356,6 +1360,59 @@ class App(tk.Tk):
             return
         disp = db.obter_dispositivo(self.conn, did)
         JanelaDetalhes(self, self.conn, disp)
+
+    def _preencher_specs_auto(self):
+        """Varre os itens SEM especificações e preenche a ficha técnica do
+        modelo reconhecido no catálogo (fichas.py). Não sobrescreve nada que já
+        exista e não altera nº de série / identificador do aparelho."""
+        itens = db.listar_dispositivos(self.conn)
+        achados = []
+        nao_reconhecidos = []
+        for d in itens:
+            if (d["especificacoes"] or "").strip():
+                continue                       # já tem specs -> não mexe
+            ficha = fichas.buscar(d["marca"] or "", d["modelo"] or "")
+            if ficha:
+                achados.append((d, ficha))
+            elif d["categoria"] in ("Tablet", "Celular"):
+                nao_reconhecidos.append(d)
+
+        if not achados:
+            msg = "Nenhum item sem especificações teve o modelo reconhecido no catálogo."
+            if nao_reconhecidos:
+                exemplos = "\n".join(
+                    f"• {d['marca'] or '?'} {d['modelo'] or '?'}"
+                    for d in nao_reconhecidos[:12])
+                msg += ("\n\nModelos ainda não catalogados (me peça para incluir):\n"
+                        + exemplos)
+            messagebox.showinfo("Preencher especificações", msg)
+            return
+
+        resumo = "\n".join(
+            f"• #{d['id']} {d['categoria']} {d['marca'] or ''} {d['modelo'] or ''}".rstrip()
+            for d, _ in achados[:20])
+        extra = f"\n… e mais {len(achados) - 20}" if len(achados) > 20 else ""
+        if not messagebox.askyesno(
+            "Preencher especificações",
+            f"Vou preencher a ficha técnica de {len(achados)} item(ns) reconhecido(s):\n\n"
+            f"{resumo}{extra}\n\n"
+            "As fichas são do MODELO (confira variações de RAM/armazenamento). "
+            "Itens que já têm especificações NÃO são alterados.\n\nContinuar?",
+        ):
+            return
+
+        nota = "\n\n(ficha de referência do modelo — confira RAM/armazenamento reais)"
+        for d, ficha in achados:
+            dados = {c: d[c] for c in db.CAMPOS_DISPOSITIVO}
+            dados["especificacoes"] = ficha + nota
+            db.atualizar_dispositivo(self.conn, d["id"], dados)
+        self._persistir()
+        self._recarregar()
+        aviso = f"{len(achados)} ficha(s) preenchida(s) com sucesso."
+        if nao_reconhecidos:
+            aviso += (f"\n\n{len(nao_reconhecidos)} tablet/celular ficaram sem ficha "
+                      "(modelo não catalogado — me peça para incluir).")
+        messagebox.showinfo("Pronto", aviso)
 
     def _editar(self):
         did = self._id_selecionado()
