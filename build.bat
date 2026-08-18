@@ -23,7 +23,8 @@ if errorlevel 1 (
 REM 2) Instala o empacotador e o tema visual (sv-ttk)
 echo Instalando/atualizando PyInstaller e o tema (sv-ttk)...
 python -m pip install --upgrade pip >nul
-python -m pip install --upgrade pyinstaller sv-ttk
+REM PyInstaller fixado < 6.22 (a 6.22.1+ quebra a reabertura pos-atualizacao)
+python -m pip install --upgrade "pyinstaller<6.22" sv-ttk
 if errorlevel 1 (
     echo [ERRO] Nao foi possivel instalar as dependencias.
     pause

@@ -18,7 +18,7 @@ import urllib.request
 
 # Versão ATUAL deste programa. Suba este número a cada nova versão publicada
 # (e crie a release no GitHub com a tag igual, ex: v1.1.0).
-VERSAO = "1.15.0"
+VERSAO = "1.16.0"
 
 # Dados do GitHub (repositório onde você publica as releases):
 GITHUB_USUARIO = "degodelf"
@@ -150,4 +150,12 @@ def instalar_e_reiniciar(exe_novo, exe_atual=None):
         f.write(_script_troca(exe_novo, exe_atual))
     # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP para o .bat sobreviver ao fechamento
     flags = 0x00000008 | 0x00000200
-    subprocess.Popen(["cmd", "/c", caminho_bat], creationflags=flags, close_fds=True)
+    # IMPORTANTE: remove as variáveis internas do PyInstaller (_PYI*/_MEIPASS2)
+    # do ambiente que o novo .exe vai herdar. Sem isso, o bootloader novo
+    # (PyInstaller >= 6.22.1) pensa que é um "worker" e faz uma validação de
+    # segurança do processo-pai — que já saiu — e recusa abrir. Aberto "limpo",
+    # ele inicia como um programa normal.
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith("_PYI") and k != "_MEIPASS2"}
+    subprocess.Popen(["cmd", "/c", caminho_bat], creationflags=flags,
+                     close_fds=True, env=env)
