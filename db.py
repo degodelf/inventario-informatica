@@ -219,6 +219,21 @@ def listar_dispositivos(conn, texto="", categoria="", status=""):
     return conn.execute(sql, params).fetchall()
 
 
+def existe_valor(conn, campo, valor, excluir_id=None):
+    """True se já existe OUTRO dispositivo com aquele valor no campo indicado.
+    Usado para avisar sobre patrimônio/ID repetido. `campo` é interno (lista
+    fixa), nunca vem do usuário."""
+    if campo not in ("patrimonio", "id_curto") or not valor:
+        return False
+    sql = f"SELECT 1 FROM dispositivos WHERE {campo} = ?"
+    params = [valor]
+    if excluir_id:
+        sql += " AND id != ?"
+        params.append(excluir_id)
+    sql += " LIMIT 1"
+    return conn.execute(sql, params).fetchone() is not None
+
+
 def buscar_por_serie(conn, numero_serie):
     """Retorna o dispositivo com aquele nº de série, ou None. Usado para não
     duplicar cadastro ao preparar o mesmo tablet de novo."""
@@ -368,3 +383,34 @@ def exportar_csv(conn, caminho):
         for r in linhas:
             w.writerow([r[c] if r[c] is not None else "" for c in r.keys()])
     return len(linhas)
+
+
+def exportar_xlsx(conn, caminho):
+    """Exporta todos os dispositivos para um .xlsx de verdade (abre no Excel/
+    LibreOffice). Valor e ID entram como número (dá para somar/ordenar)."""
+    import xlsx
+
+    linhas = conn.execute(
+        "SELECT id, patrimonio, id_curto, categoria, marca, modelo, numero_serie, status, "
+        "local, responsavel, data_compra, garantia_ate, valor, especificacoes, observacoes "
+        "FROM dispositivos ORDER BY categoria, marca"
+    ).fetchall()
+    cabecalhos = [
+        "ID", "Patrimônio", "ID (2 díg.)", "Categoria", "Marca", "Modelo", "Nº Série",
+        "Status", "Local", "Responsável", "Data compra", "Garantia até",
+        "Valor", "Especificações", "Observações",
+    ]
+    larguras = [6, 16, 9, 18, 14, 20, 18, 14, 16, 16, 13, 13, 12, 40, 40]
+    dados = []
+    for r in linhas:
+        dados.append([
+            r["id"],
+            r["patrimonio"] or "", r["id_curto"] or "", r["categoria"],
+            r["marca"] or "", r["modelo"] or "", r["numero_serie"] or "", r["status"],
+            r["local"] or "", r["responsavel"] or "", r["data_compra"] or "",
+            r["garantia_ate"] or "",
+            r["valor"] if r["valor"] is not None else "",
+            r["especificacoes"] or "", r["observacoes"] or "",
+        ])
+    xlsx.escrever(caminho, cabecalhos, dados, larguras=larguras, nome_aba="Inventário")
+    return len(dados)

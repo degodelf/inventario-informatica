@@ -18,7 +18,7 @@ import urllib.request
 
 # Versão ATUAL deste programa. Suba este número a cada nova versão publicada
 # (e crie a release no GitHub com a tag igual, ex: v1.1.0).
-VERSAO = "1.13.0"
+VERSAO = "1.14.0"
 
 # Dados do GitHub (repositório onde você publica as releases):
 GITHUB_USUARIO = "degodelf"
@@ -95,19 +95,45 @@ def baixar(url, destino, progresso=None, timeout=60):
                 baixado += len(pedaco)
                 if progresso:
                     progresso(baixado, total)
+
+    # INTEGRIDADE — trocar um .exe truncado quebra o programa ("Failed to load
+    # Python DLL"). Só devolvemos o arquivo se ele veio COMPLETO.
+    if total and baixado != total:
+        _apagar(destino)
+        raise IOError(
+            f"Download incompleto ({baixado} de {total} bytes). "
+            "Nada foi alterado — tente novamente."
+        )
+    # sanidade: o .exe do programa tem dezenas de MB; algo minúsculo é erro
+    # (ex.: página de erro em HTML no lugar do binário).
+    if baixado < 2_000_000:
+        _apagar(destino)
+        raise IOError("O arquivo baixado é pequeno demais para ser o programa. Cancelado.")
     return destino
+
+
+def _apagar(caminho):
+    try:
+        os.remove(caminho)
+    except OSError:
+        pass
 
 
 def _script_troca(exe_novo, exe_atual):
     """Texto do .bat que espera o programa fechar, troca o .exe e reabre."""
+    pasta = os.path.dirname(exe_atual) or "."
     return (
         "@echo off\r\n"
+        f'cd /d "{pasta}"\r\n'
         ":retry\r\n"
         f'move /Y "{exe_novo}" "{exe_atual}" >nul 2>&1\r\n'
         "if errorlevel 1 (\r\n"
         "  ping 127.0.0.1 -n 2 >nul\r\n"   # espera ~1s e tenta de novo
         "  goto retry\r\n"
         ")\r\n"
+        # folga após a troca: dá tempo do processo antigo liberar tudo e do
+        # antivírus terminar de varrer o novo .exe antes de ele abrir
+        "ping 127.0.0.1 -n 4 >nul\r\n"
         f'start "" "{exe_atual}"\r\n'
         'del "%~f0"\r\n'                    # o .bat se apaga no fim
     )

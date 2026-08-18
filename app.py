@@ -29,6 +29,7 @@ import atualizacao
 import adb
 import mtp
 import specs
+import xlsx  # noqa: F401 (usado por db.exportar_xlsx; import garante empacotamento)
 
 # Tema visual moderno (Windows 11). Opcional: se não estiver instalado, o
 # programa continua funcionando com o tema padrão do Tkinter.
@@ -486,6 +487,24 @@ class FormularioDispositivo(tk.Toplevel):
             messagebox.showwarning("Faltou dado", "Escolha o status.")
             return
 
+        # aviso de patrimônio / ID repetido (não bloqueia — só confirma)
+        excluir_id = self.disp["id"] if self.disp else None
+        pat = self.vars["patrimonio"].get().strip()
+        idc = self.vars["id_curto"].get().strip()
+        repetidos = []
+        if pat and db.existe_valor(self.conn, "patrimonio", pat, excluir_id):
+            repetidos.append(f"patrimônio '{pat}'")
+        if idc and db.existe_valor(self.conn, "id_curto", idc, excluir_id):
+            repetidos.append(f"ID '{idc}'")
+        if repetidos:
+            if not messagebox.askyesno(
+                "Possível duplicado",
+                "Já existe outro item com " + " e ".join(repetidos) + ".\n\n"
+                "Salvar mesmo assim?",
+                parent=self,
+            ):
+                return
+
         # id do pai selecionado
         pai_id = None
         rotulo_pai = self.var_pai.get()
@@ -869,6 +888,115 @@ class JanelaListaApps(tk.Toplevel):
         self._recarregar()
 
 
+# --- Janela: detalhes de um dispositivo (só leitura) --------------------------
+
+class JanelaDetalhes(tk.Toplevel):
+    """Mostra TUDO de um dispositivo num lugar só (sem editar): dados, ficha
+    técnica, acessórios vinculados e histórico de manutenções."""
+
+    def __init__(self, master, conn, disp):
+        super().__init__(master)
+        self.conn = conn
+        self.disp = disp
+        self.withdraw()
+        titulo = f"{disp['categoria']} {disp['marca'] or ''} {disp['modelo'] or ''}".strip()
+        self.title("Detalhes — " + titulo)
+        self.transient(master)
+        self._montar()
+        _barra_titulo(self)
+        self.deiconify()
+        self.grab_set()
+        self.bind("<Escape>", lambda e: self.destroy())
+
+    def _rotulo_pai(self):
+        if not self.disp["pai_id"]:
+            return "—"
+        p = db.obter_dispositivo(self.conn, self.disp["pai_id"])
+        if not p:
+            return "—"
+        rot = f"[{p['id']}] {p['categoria']} {p['marca'] or ''} {p['modelo'] or ''}".strip()
+        return rot + (f" (pat. {p['patrimonio']})" if p["patrimonio"] else "")
+
+    def _texto(self):
+        d = self.disp
+        L = []
+        L.append(f"{d['categoria']}  {d['marca'] or ''} {d['modelo'] or ''}".rstrip())
+        L.append("─" * 52)
+        campos = [
+            ("Patrimônio / Cód. barras", d["patrimonio"]),
+            ("ID interno", d["id_curto"]),
+            ("Nº de série", d["numero_serie"]),
+            ("Status", d["status"]),
+            ("Local / Sala", d["local"]),
+            ("Responsável", d["responsavel"]),
+            ("Data de compra", d["data_compra"]),
+        ]
+        estado_g = _estado_garantia(d["garantia_ate"])
+        aviso_g = {"vencida": "  ⚠ VENCIDA", "perto": "  • vencendo"}.get(estado_g, "")
+        campos.append(("Garantia até", (d["garantia_ate"] or "") + aviso_g if d["garantia_ate"] else None))
+        campos.append(("Valor", fmt_valor(d["valor"]) or None))
+        campos.append(("Vinculado a", self._rotulo_pai()))
+        for rot, val in campos:
+            L.append(f"{rot+':':<26} {val if val not in (None, '') else '—'}")
+
+        L.append("")
+        L.append("ESPECIFICAÇÕES")
+        L.append(d["especificacoes"] or "(não informadas — use “Ler specs” no cadastro)")
+        L.append("")
+        L.append("OBSERVAÇÕES")
+        L.append(d["observacoes"] or "—")
+
+        filhos = db.listar_filhos(self.conn, d["id"])
+        L.append("")
+        L.append(f"ACESSÓRIOS VINCULADOS ({len(filhos)})")
+        if filhos:
+            for f in filhos:
+                rot = f"  • [{f['id']}] {f['categoria']} {f['marca'] or ''} {f['modelo'] or ''}".rstrip()
+                if f["patrimonio"]:
+                    rot += f" (pat. {f['patrimonio']})"
+                L.append(rot)
+        else:
+            L.append("  —")
+
+        manuts = db.listar_manutencoes(self.conn, d["id"])
+        L.append("")
+        L.append(f"MANUTENÇÕES ({len(manuts)})")
+        if manuts:
+            for m in manuts:
+                partes = [p for p in (
+                    m["data"], m["empresa"], m["descricao"],
+                    fmt_valor(m["custo"]) if m["custo"] is not None else "",
+                ) if p]
+                anexo = "  📎" if m["anexo_path"] else ""
+                L.append("  • " + " · ".join(partes) + anexo)
+        else:
+            L.append("  —")
+        return "\n".join(L)
+
+    def _montar(self):
+        quadro = ttk.Frame(self, padding=12)
+        quadro.grid(sticky="nsew")
+        txt = tk.Text(quadro, width=68, height=28, wrap="word")
+        vsb = ttk.Scrollbar(quadro, orient="vertical", command=txt.yview)
+        txt.configure(yscrollcommand=vsb.set)
+        txt.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        txt.insert("1.0", self._texto())
+        txt.configure(state="disabled")       # só leitura
+        botoes = ttk.Frame(quadro)
+        botoes.grid(row=1, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(botoes, text="Editar…", command=self._editar).grid(row=0, column=0, padx=4)
+        ttk.Button(botoes, text="Fechar", command=self.destroy).grid(row=0, column=1)
+
+    def _editar(self):
+        """Fecha os detalhes e abre a edição pelo dono (a janela principal)."""
+        self.destroy()
+        abrir = getattr(self.master, "_editar", None)
+        if abrir:
+            self.master._selecionar_id(self.disp["id"])
+            abrir()
+
+
 # --- Janela principal ---------------------------------------------------------
 
 class App(tk.Tk):
@@ -954,7 +1082,8 @@ class App(tk.Tk):
         m_arq.add_command(label="♻️ Restaurar backup…", command=self._restaurar_backup)
         menubar.add_cascade(label="Arquivo", menu=m_arq)
         m_rel = tk.Menu(menubar, tearoff=0)
-        m_rel.add_command(label="Exportar para Excel (CSV)", command=self._exportar)
+        m_rel.add_command(label="Exportar para Excel (.xlsx)", command=self._exportar_xlsx)
+        m_rel.add_command(label="Exportar para CSV", command=self._exportar)
         m_rel.add_command(label="Relatório / PDF (navegador)", command=self._relatorio)
         m_rel.add_command(label="Gerar etiquetas de código de barras", command=self._etiquetas)
         menubar.add_cascade(label="Relatórios", menu=m_rel)
@@ -1031,13 +1160,14 @@ class App(tk.Tk):
         acoes = ttk.Frame(self, padding=(10, 0))
         acoes.pack(fill="x")
         ttk.Button(acoes, text="＋ Novo", command=self._novo).pack(side="left")
-        ttk.Button(acoes, text="Editar", command=self._editar).pack(side="left", padx=4)
-        ttk.Button(acoes, text="Excluir", command=self._excluir).pack(side="left")
-        ttk.Button(acoes, text="Manutenções…", command=self._manutencoes).pack(side="left", padx=4)
+        ttk.Button(acoes, text="🔍 Detalhes", command=self._detalhes).pack(side="left", padx=(0, 4))
+        ttk.Button(acoes, text="Editar", command=self._editar).pack(side="left")
+        ttk.Button(acoes, text="Excluir", command=self._excluir).pack(side="left", padx=4)
+        ttk.Button(acoes, text="Manutenções…", command=self._manutencoes).pack(side="left")
         ttk.Button(acoes, text="🔄 Atualizar", command=self._recarregar).pack(side="left")
         ttk.Button(acoes, text="🏷️ Etiquetas", command=self._etiquetas).pack(side="right")
         ttk.Button(acoes, text="📄 Relatório/PDF", command=self._relatorio).pack(side="right", padx=4)
-        ttk.Button(acoes, text="Exportar CSV", command=self._exportar).pack(side="right")
+        ttk.Button(acoes, text="📊 Exportar Excel", command=self._exportar_xlsx).pack(side="right")
 
         # Tabela
         quadro = ttk.Frame(self, padding=10)
@@ -1068,6 +1198,7 @@ class App(tk.Tk):
 
         # Menu de clique com o botão direito na tabela
         self.menu_tabela = tk.Menu(self, tearoff=0)
+        self.menu_tabela.add_command(label="Ver detalhes", command=self._detalhes)
         self.menu_tabela.add_command(label="Editar", command=self._editar)
         self.menu_tabela.add_command(label="Manutenções…", command=self._manutencoes)
         self.menu_tabela.add_command(label="Gerar etiqueta", command=self._etiquetas)
@@ -1216,6 +1347,14 @@ class App(tk.Tk):
             self._persistir()
             self._mostrar_novo(f.salvou_id)
 
+    def _detalhes(self):
+        did = self._id_selecionado()
+        if not did:
+            messagebox.showinfo("Detalhes", "Selecione um dispositivo na lista.")
+            return
+        disp = db.obter_dispositivo(self.conn, did)
+        JanelaDetalhes(self, self.conn, disp)
+
     def _editar(self):
         did = self._id_selecionado()
         if not did:
@@ -1270,6 +1409,26 @@ class App(tk.Tk):
             return
         n = db.exportar_csv(self.conn, caminho)
         messagebox.showinfo("Exportado", f"{n} dispositivos exportados para:\n{caminho}")
+
+    def _exportar_xlsx(self):
+        caminho = filedialog.asksaveasfilename(
+            title="Exportar para Excel",
+            defaultextension=".xlsx",
+            initialfile="inventario.xlsx",
+            filetypes=[("Planilha do Excel", "*.xlsx")],
+        )
+        if not caminho:
+            return
+        try:
+            n = db.exportar_xlsx(self.conn, caminho)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror("Exportar", f"Não consegui gerar a planilha:\n{e}")
+            return
+        if messagebox.askyesno(
+            "Exportado",
+            f"{n} dispositivos exportados para:\n{caminho}\n\nAbrir a planilha agora?",
+        ):
+            abrir_arquivo(caminho)
 
     def _fazer_backup(self):
         """Copia o banco (e a pasta de anexos) para uma pasta escolhida.
